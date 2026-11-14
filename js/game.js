@@ -44,8 +44,6 @@ class Game {
       btcStat: document.getElementById('stat-btc'),
       fuel: document.getElementById('fuel'),
       fuelFill: document.getElementById('fuel-fill'),
-      firewall: document.getElementById('hud-firewall'),
-      firewallStat: document.getElementById('stat-firewall'),
       msg: document.getElementById('message'),
       msgTitle: document.getElementById('message-title'),
       msgSub: document.getElementById('message-sub'),
@@ -575,9 +573,12 @@ class Game {
 
   gameOver(title, reason) {
     this.state = 'over';
-    this.leaderboard.submitRun(this._leaderboardMode(), this.score);
-    const d = Math.floor(this.distance);
+    const mode = this._leaderboardMode();
     const lv = this.level;
+    // A failed level attempt has no completion time, so there's nothing a Levels (time-based)
+    // leaderboard entry would mean here - only levelComplete() submits for Levels.
+    if (!lv) this.leaderboard.submitRun(mode, this.score);
+    const d = Math.floor(this.distance);
     let sub;
     if (lv) {
       sub = `${reason}\nReached ${Math.min(d, lv.length)} / ${lv.length} m`;
@@ -588,6 +589,7 @@ class Game {
         Storage.set('packetracer.hackerBest', this.score);
       }
       this.showResults(title, reason, newBest);
+      this._showEndLeaderboard('results', mode);
       return;
     } else if (this.isProgression) {
       sub = `${reason}\nDistance: ${d} m`;
@@ -605,6 +607,25 @@ class Game {
       }
     }
     this.showMessage(title, sub + `\nScore: ${this.score}` + '\n\nENTER retry · ESC menu', true);
+    this._showEndLeaderboard('message', mode);
+  }
+
+  // Populates and reveals the small top-N leaderboard panel on a terminal screen.
+  // panelPrefix matches the DOM id prefix: 'message' (game over / level complete) or
+  // 'results' (Hacker's results screen).
+  async _showEndLeaderboard(panelPrefix, mode) {
+    const panel = document.getElementById(`${panelPrefix}-leaderboard`);
+    const list = document.getElementById(`${panelPrefix}-leaderboard-list`);
+    const title = document.getElementById(`${panelPrefix}-leaderboard-title`);
+    if (!panel || !list) return;
+    const valueFn = leaderboardValueFn(mode);
+    panel.classList.remove('hidden');
+    if (title) title.textContent = `TOP ${CONFIG.leaderboard.topCount} - ${leaderboardModeLabel(mode)}`;
+    renderLeaderboardRows(list, null, valueFn);
+    const rows = await this.leaderboard.fetchTop(mode);
+    // The player may have already retried (R) before this resolved - don't paint a stale panel.
+    if (this.state !== 'over' && this.state !== 'complete') return;
+    renderLeaderboardRows(list, rows, valueFn);
   }
 
   // Hacker mode results: every kind of points collected, as a list
@@ -639,7 +660,8 @@ class Game {
 
   levelComplete() {
     this.state = 'complete';
-    this.leaderboard.submitRun(this._leaderboardMode(), this.score);
+    const mode = this._leaderboardMode();
+    this.leaderboard.submitRun(mode, this.score, { time: this.runTime });
     const i = this.mode.index, lv = this.level, t = this.runTime;
     const prev = this.levelRecords[i];
     let sub = `Time: ${formatTime(t)}  ·  Score: ${this.score}`;
@@ -655,6 +677,7 @@ class Game {
       ? `\n\n${prev == null ? next.name + ' unlocked!\n' : ''}ENTER next level · R retry · ESC menu`
       : '\n\nAll levels complete!\nENTER level select · R retry';
     this.showMessage(`${lv.name.toUpperCase()} COMPLETE`, sub);
+    this._showEndLeaderboard('message', mode);
   }
 
   _cameraTarget() {
@@ -688,6 +711,7 @@ class Game {
     ctx.translate(-this.camera.x, -this.camera.y);
     const v = this.view;
     this.terrain.draw(ctx, v);
+    this.drawDistanceMarkers(ctx, v);
     this.drawFinish(ctx, v);
     if (this.isProgression) this.drawShopLine(ctx, v);
     this.world.draw(ctx, v);
@@ -707,7 +731,57 @@ class Game {
     ctx.restore();
 
     this._drawScoreFly(ctx);
+    this._drawFirewallDistance(ctx);
     if (this.debug) this.drawDebug(ctx);
+  }
+
+  // Faint vertical lines across the world every 50 m, each labelled with its running total -
+  // a visual ruler for how far the run has gone (every mode; drawn under props/truck).
+  drawDistanceMarkers(ctx, v) {
+    const stepPx = 50 * CONFIG.world.pxPerMeter;
+    const firstK = Math.max(1, Math.ceil((v.x - this.startX) / stepPx));
+    const lastK = Math.floor((v.x + v.w - this.startX) / stepPx);
+    if (lastK < firstK) return;
+    ctx.save();
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    for (let k = firstK; k <= lastK; k++) {
+      const x = this.startX + k * stepPx;
+      const g = this.terrain.heightAt(x);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, v.y); ctx.lineTo(x, g); ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillText(`${k * 50} m`, x, v.y + 14);
+    }
+    ctx.restore();
+  }
+
+  // Firewall distance readout: pinned to the left edge of the screen, at the truck's height, so
+  // it's always right where the player is looking without crowding the truck itself. Drawn in
+  // screen space (no DOM element, no outline box - just stroked text like the other floating
+  // HUD text in this game).
+  _drawFirewallDistance(ctx) {
+    if (this.state === 'menu') return;
+    const F = CONFIG.firewall;
+    const target = this.isHacker ? this.truck.x : this.packet.x;
+    const gap = Math.max(0, target - this.firewall.x);
+    const meters = Math.floor(gap / CONFIG.world.pxPerMeter);
+    const danger = gap < F.warnDistance;
+    const x = 16;
+    const y = (this.truck.y - this.camera.y) * this.zoom;
+
+    ctx.save();
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+    const text = `FIREWALL ${meters} m`;
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = danger ? '#ff5d6c' : '#ffb020';
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 
   // Background colour + grid colour for the current distance (blended between stages)
@@ -923,10 +997,6 @@ class Game {
       this.hud.best.textContent = this.isProgression ? this.progressBest : this.best;
       this.hud.bestUnit.textContent = 'm';
     }
-    const fwGap = Math.max(0, (this.isHacker ? this.truck.x : this.packet.x) - this.firewall.x);
-    this.hud.firewall.textContent = Math.floor(fwGap / CONFIG.world.pxPerMeter);
-    this.hud.firewallStat.classList.toggle('danger', fwGap < CONFIG.firewall.warnDistance);
-
     const fuelFrac = this.fuel / this.jetFuelMax;
     this.hud.score.textContent = this.scoreShown;
     this.hud.fuelFill.style.width = `${(fuelFrac * 100).toFixed(1)}%`;
@@ -953,11 +1023,16 @@ class Game {
     show('timeout', warn ? CONFIG.rules.stuckTime - this.stuckTimer : 0);
   }
 
+  // Shared by the "ready to start"/"paused" prompts and the game-over/level-complete screens.
+  // Always hides the end-of-run leaderboard panel; gameOver()/levelComplete() re-show it
+  // themselves right after calling this, via _showEndLeaderboard().
   showMessage(title, sub, danger = false) {
     this.hud.msgTitle.textContent = title;
     this.hud.msgSub.textContent = sub;
     this.hud.msg.classList.toggle('danger', danger);
     this.hud.msg.classList.remove('hidden');
+    const lb = document.getElementById('message-leaderboard');
+    if (lb) lb.classList.add('hidden');
   }
 
   hideMessage() { this.hud.msg.classList.add('hidden'); }

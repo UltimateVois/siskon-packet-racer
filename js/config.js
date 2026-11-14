@@ -1,6 +1,6 @@
 // All tunable numbers live here. Units: pixels, seconds. World y grows DOWN (canvas style).
 const CONFIG = {
-  version: 'a0.2.0',      // game version (shown in the main menu; see CHANGELOG.md)
+  version: 'a0.2.1',      // game version (shown in the main menu; see CHANGELOG.md)
   saveVersion: 2,         // bump to wipe saved records/unlocks on next load
 
   // Player identity (js/identity.js): a chosen username + a stable anonymous playerId.
@@ -16,11 +16,13 @@ const CONFIG = {
   // supabaseUrl/supabaseAnonKey blank to keep the leaderboard fully offline (no network calls).
   leaderboard: {
     enabled: true,            // master switch; false disables all leaderboard network calls
-    supabaseUrl: '',          // e.g. 'https://xxxxxxxx.supabase.co' (no trailing slash)
-    supabaseAnonKey: '',      // Supabase anon/public API key (safe to ship client-side)
-    table: 'scores',          // table that receives score submissions
+    supabaseUrl: 'https://cfbtdzsrtwneiutxxxtj.supabase.co',   // no trailing slash
+    supabaseAnonKey: 'sb_publishable_Pvhw_hzXXU_O5ez9h1HZpg_qDBMieT6',   // publishable key (safe to ship client-side)
+    table: 'leaderboard',     // table that receives score submissions
     minScore: 1,              // don't submit runs scoring below this (nothing worth posting)
     toastTime: 4,             // seconds the "couldn't upload score" notice stays on screen
+    topCount: 10,             // how many rows the top-scores panels show
+    topCacheTime: 20,         // seconds a fetched top-scores list is reused before refetching
   },
 
   physics: {

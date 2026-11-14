@@ -69,15 +69,5 @@ class Firewall {
       ctx.fillStyle = '#ffb020';
       ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x + len * 0.55, y); ctx.lineTo(x, y + 5); ctx.fill();
     }
-
-    // label
-    ctx.save();
-    ctx.translate(x - 22, view.y + view.h / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = 'rgba(255, 200, 120, 0.85)';
-    ctx.font = 'bold 18px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('FIREWALL', 0, 6);
-    ctx.restore();
   }
 }

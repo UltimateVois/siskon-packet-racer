@@ -16,7 +16,6 @@
     <div class="stat hidden" id="stat-btc"><span class="label">₿</span><span id="hud-btc" class="value">0</span><span class="unit">BTC</span></div>
     <div class="stat hidden" id="stat-time"><span class="label" id="hud-time-label">Time</span><span id="hud-time" class="value">0</span><span class="unit">s</span></div>
     <div class="stat"><span class="label" id="hud-best-label">Best</span><span id="hud-best" class="value">0</span><span class="unit" id="hud-best-unit">m</span></div>
-    <div class="stat" id="stat-firewall"><span class="label">Firewall</span><span id="hud-firewall" class="value">0</span><span class="unit">m behind</span></div>
     <div class="stat" id="fuel"><span class="label">Jetpack</span><div class="bar"><div id="fuel-fill"></div></div></div>
   </div>
 
@@ -33,61 +32,85 @@
   </div>
 
   <div id="message" class="overlay">
-    <h1 id="message-title">PACKET RACER</h1>
-    <p id="message-sub">Hold SPACE to accelerate</p>
+    <div class="split-body">
+      <div class="split-main">
+        <h1 id="message-title">PACKET RACER</h1>
+        <p id="message-sub">Hold SPACE to accelerate</p>
+      </div>
+      <div id="message-leaderboard" class="leaderboard-panel hidden">
+        <h2 id="message-leaderboard-title">TOP 10</h2>
+        <ol id="message-leaderboard-list" class="leaderboard-list"></ol>
+      </div>
+    </div>
   </div>
 
   <div id="menu" class="overlay menu">
     <h1>SISKON PACKET RACER</h1>
     <p id="menu-version" class="menu-version"></p>
-    <div id="menu-modes" class="menu-page">
-      <div class="menu-username-row">
-        <span>Username: <strong id="menu-username-display"></strong></span>
-        <button type="button" data-action="change-username" class="secondary small">Change Username</button>
+    <div class="split-body">
+      <div class="split-main">
+        <div id="menu-modes" class="menu-page">
+          <div class="menu-username-row">
+            <span>Username: <strong id="menu-username-display"></strong></span>
+            <button type="button" data-action="change-username" class="secondary small">Change Username</button>
+          </div>
+          <p>Select game mode</p>
+          <button data-mode="infinite">INFINITE<small>Drive as far as you can</small></button>
+          <button data-mode="progression">PROGRESSION<small>Infinite, plus collect ₿ and shop for upgrades every 100 m</small></button>
+          <button data-mode="hacker">HACKER<small>No packet - smash network gear for points before time runs out</small></button>
+          <button data-mode="levels">LEVELS<small>Beat each level to unlock the next</small></button>
+        </div>
+        <div id="menu-levels" class="menu-page hidden">
+          <p>Select level</p>
+          <div id="level-list"></div>
+          <button data-action="back" class="secondary">BACK</button>
+        </div>
+        <div id="menu-username" class="menu-page hidden">
+          <p>Type username to be shown on leaderboards.</p>
+          <form id="username-form">
+            <input id="username-input" type="text" maxlength="32" autocomplete="off" spellcheck="false"
+                   placeholder="3-16 chars: letters, numbers, _ -">
+            <p id="username-error" class="menu-error hidden"></p>
+            <button type="submit">SAVE</button>
+            <button type="button" id="username-cancel" data-action="username-cancel" class="secondary hidden">CANCEL</button>
+          </form>
+        </div>
+        <p class="menu-help">↑/↓ select · ENTER confirm · ESC back</p>
+        <div class="menu-controls">
+          <h2>Controls</h2>
+          <div class="controls-grid">
+            <span><kbd>Space</kbd> <kbd>↑</kbd></span><span>Gas</span>
+            <span><kbd>Ctrl</kbd> <kbd>↓</kbd></span><span>Brake / reverse</span>
+            <span><kbd>←</kbd> <kbd>→</kbd></span><span>Tilt</span>
+            <span><kbd>Shift</kbd></span><span>Jetpack</span>
+            <span><kbd>P</kbd></span><span>Pause</span>
+            <span><kbd>R</kbd></span><span>Restart</span>
+            <span><kbd>Esc</kbd></span><span>Menu</span>
+          </div>
+        </div>
       </div>
-      <p>Select game mode</p>
-      <button data-mode="infinite">INFINITE<small>Drive as far as you can</small></button>
-      <button data-mode="progression">PROGRESSION<small>Infinite, plus collect ₿ and shop for upgrades every 100 m</small></button>
-      <button data-mode="hacker">HACKER<small>No packet - smash network gear for points before time runs out</small></button>
-      <button data-mode="levels">LEVELS<small>Beat each level to unlock the next</small></button>
-    </div>
-    <div id="menu-levels" class="menu-page hidden">
-      <p>Select level</p>
-      <div id="level-list"></div>
-      <button data-action="back" class="secondary">BACK</button>
-    </div>
-    <div id="menu-username" class="menu-page hidden">
-      <p>Choose a username to play online</p>
-      <form id="username-form">
-        <input id="username-input" type="text" maxlength="32" autocomplete="off" spellcheck="false"
-               placeholder="3-16 chars: letters, numbers, _ -">
-        <p id="username-error" class="menu-error hidden"></p>
-        <button type="submit">SAVE</button>
-        <button type="button" id="username-cancel" data-action="username-cancel" class="secondary hidden">CANCEL</button>
-      </form>
-    </div>
-    <p class="menu-help">↑/↓ select · ENTER confirm · ESC back</p>
-    <div class="menu-controls">
-      <h2>Controls</h2>
-      <div class="controls-grid">
-        <span><kbd>Space</kbd> <kbd>↑</kbd></span><span>Gas</span>
-        <span><kbd>Ctrl</kbd> <kbd>↓</kbd></span><span>Brake / reverse</span>
-        <span><kbd>←</kbd> <kbd>→</kbd></span><span>Tilt</span>
-        <span><kbd>Shift</kbd></span><span>Jetpack</span>
-        <span><kbd>P</kbd></span><span>Pause</span>
-        <span><kbd>R</kbd></span><span>Restart</span>
-        <span><kbd>Esc</kbd></span><span>Menu</span>
+      <div id="menu-leaderboard" class="leaderboard-panel hidden">
+        <h2 id="menu-leaderboard-title">TOP 10</h2>
+        <ol id="menu-leaderboard-list" class="leaderboard-list"></ol>
       </div>
     </div>
   </div>
 
   <div id="results" class="overlay results hidden">
-    <h1 id="results-title">TIME UP</h1>
-    <p id="results-reason"></p>
-    <table id="results-table"></table>
-    <p id="results-best"></p>
-    <p id="results-stats"></p>
-    <p class="menu-help">ENTER retry · ESC menu</p>
+    <div class="split-body">
+      <div class="split-main">
+        <h1 id="results-title">TIME UP</h1>
+        <p id="results-reason"></p>
+        <table id="results-table"></table>
+        <p id="results-best"></p>
+        <p id="results-stats"></p>
+        <p class="menu-help">ENTER retry · ESC menu</p>
+      </div>
+      <div id="results-leaderboard" class="leaderboard-panel hidden">
+        <h2 id="results-leaderboard-title">TOP 10</h2>
+        <ol id="results-leaderboard-list" class="leaderboard-list"></ol>
+      </div>
+    </div>
   </div>
 
   <div id="upgrade" class="overlay menu hidden">

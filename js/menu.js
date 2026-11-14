@@ -16,6 +16,10 @@ class Menu {
     this.usernameCancel = document.getElementById('username-cancel');
     this.usernameForced = true;
     this.page = 'modes';
+    this.leaderboardPanel = document.getElementById('menu-leaderboard');
+    this.leaderboardTitle = document.getElementById('menu-leaderboard-title');
+    this.leaderboardList = document.getElementById('menu-leaderboard-list');
+    this._lbRequestMode = null;
     const v = document.getElementById('menu-version');
     if (v) v.textContent = `version ${CONFIG.version}`;
 
@@ -38,6 +42,14 @@ class Menu {
         this._saveUsername();
       });
     }
+
+    // Top-10 panel: follows whichever mode/level button is currently highlighted, by
+    // keyboard focus or mouse hover.
+    this.el.addEventListener('focusin', (e) => this._highlightLeaderboardFor(e.target));
+    this.el.addEventListener('mouseover', (e) => {
+      const b = e.target.closest('button');
+      if (b) this._highlightLeaderboardFor(b);
+    });
   }
 
   get visible() { return !this.el.classList.contains('hidden'); }
@@ -51,8 +63,37 @@ class Menu {
     else if (page === 'username') this._openUsernameForm(hasUsername);
     for (const [name, el] of Object.entries(this.pages)) el.classList.toggle('hidden', name !== page);
     this.el.classList.remove('hidden');
+    if (this.leaderboardPanel) this.leaderboardPanel.classList.toggle('hidden', page === 'username');
     if (page === 'username' && this.usernameInput) this.usernameInput.focus();
     else { const first = this._buttons()[0]; if (first) first.focus(); }
+  }
+
+  // Which leaderboard mode key a button represents, or null if it doesn't have one (BACK,
+  // CANCEL, Change Username, a locked level has none either way). LEVELS itself (before a
+  // specific level is picked) defaults to Level 1's board.
+  _modeKeyForButton(b) {
+    if (b.dataset.mode === 'levels') return 'level1';
+    if (b.dataset.mode) return b.dataset.mode;
+    if (b.dataset.level !== undefined) return `level${+b.dataset.level + 1}`;
+    return null;
+  }
+
+  _highlightLeaderboardFor(target) {
+    if (this.page !== 'modes' && this.page !== 'levels') return;
+    const b = target && target.closest ? target.closest('button') : null;
+    const mode = b && this._modeKeyForButton(b);
+    if (mode) this._showLeaderboard(mode);
+  }
+
+  async _showLeaderboard(mode) {
+    if (this._lbRequestMode === mode) return;   // already showing/loading this one
+    this._lbRequestMode = mode;
+    const valueFn = leaderboardValueFn(mode);
+    if (this.leaderboardTitle) this.leaderboardTitle.textContent = `TOP ${CONFIG.leaderboard.topCount} - ${leaderboardModeLabel(mode)}`;
+    renderLeaderboardRows(this.leaderboardList, null, valueFn);
+    const rows = await this.game.leaderboard.fetchTop(mode);
+    if (this._lbRequestMode !== mode) return;   // highlight moved on again before this resolved
+    renderLeaderboardRows(this.leaderboardList, rows, valueFn);
   }
 
   _refreshUsernameBanner() {

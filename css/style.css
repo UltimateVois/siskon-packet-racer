@@ -148,6 +148,44 @@ html, body {
 .menu button.secondary { font-size: 13px; text-align: center; }
 .menu-help { margin-top: 14px; font-size: 11px !important; opacity: 0.5 !important; }
 
+/* ---------- Two-column overlays: main content + a leaderboard panel on the right ---------- */
+.split-body { display: flex; align-items: flex-start; gap: 20px; text-align: left; }
+.split-main { flex: 1 1 auto; min-width: 0; }
+
+.leaderboard-panel {
+  flex: 0 0 170px;
+  border-left: 1px solid rgba(56, 232, 255, 0.25);
+  padding-left: 18px;
+  align-self: stretch;
+}
+.leaderboard-panel.hidden { display: none; }
+.leaderboard-panel h2 {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 10px;
+  text-align: center;
+}
+.leaderboard-list {
+  list-style: none;
+  counter-reset: lb;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+}
+.leaderboard-list li { counter-increment: lb; display: flex; align-items: baseline; gap: 6px; }
+.leaderboard-list li::before { content: counter(lb) '.'; opacity: 0.55; min-width: 1.5em; }
+.leaderboard-list li.none, .leaderboard-list li.loading { opacity: 0.6; font-size: 12px; }
+.leaderboard-list li.none::before, .leaderboard-list li.loading::before { content: none; }
+.leaderboard-list .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leaderboard-list .score { color: #ffe66d; font-weight: bold; white-space: nowrap; }
+
+/* Side-by-side leaderboard panels don't fit a narrow viewport; drop them rather than squeeze */
+@media (max-width: 680px) {
+  .leaderboard-panel { display: none !important; }
+}
+
 /* ---------- Jetpack fuel gauge (in the top HUD row) ---------- */
 #fuel { align-items: center; }
 #fuel .bar {

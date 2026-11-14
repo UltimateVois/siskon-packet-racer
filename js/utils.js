@@ -95,6 +95,42 @@ const Storage = {
   },
 };
 
+// Renders a leaderboard top-N panel's rows into an <ol>. rows is an array of
+// { username, score, time }, or null to show a loading placeholder. valueFn(row) formats the
+// right-hand column - defaults to the raw score, pass e.g. (r) => formatTime(r.time) for a
+// time-based (Levels) panel. Built with createElement/textContent (never innerHTML) because
+// usernames come from other players over the network and must never be interpreted as HTML.
+function renderLeaderboardRows(listEl, rows, valueFn) {
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (rows === null) {
+    const li = document.createElement('li');
+    li.className = 'loading';
+    li.textContent = 'Loading...';
+    listEl.appendChild(li);
+    return;
+  }
+  if (!rows.length) {
+    const li = document.createElement('li');
+    li.className = 'none';
+    li.textContent = 'No scores yet';
+    listEl.appendChild(li);
+    return;
+  }
+  for (const r of rows) {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = r.username;
+    const value = document.createElement('span');
+    value.className = 'score';
+    value.textContent = valueFn ? valueFn(r) : r.score;
+    li.appendChild(name);
+    li.appendChild(value);
+    listEl.appendChild(li);
+  }
+}
+
 // Filled rect with top corners rounded (bottom sits flat on the ground)
 function roundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
