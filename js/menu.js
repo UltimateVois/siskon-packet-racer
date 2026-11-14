@@ -50,6 +50,9 @@ class Menu {
       const b = e.target.closest('button');
       if (b) this._highlightLeaderboardFor(b);
     });
+    // It's a separate floating window (see index.html), so it has to be told where #menu
+    // actually ended up - keep it pinned alongside it if the browser window resizes.
+    window.addEventListener('resize', () => this._positionLeaderboardWindow());
   }
 
   get visible() { return !this.el.classList.contains('hidden'); }
@@ -63,9 +66,10 @@ class Menu {
     else if (page === 'username') this._openUsernameForm(hasUsername);
     for (const [name, el] of Object.entries(this.pages)) el.classList.toggle('hidden', name !== page);
     this.el.classList.remove('hidden');
-    // Always shown, even on the username page - hiding it there used to remove its whole
-    // column from layout, which is what was still changing the menu's width between pages.
+    // Always shown, even on the username page - hiding it there used to remove it from the
+    // page entirely, which (back when it shared #menu's box) changed the menu's width.
     if (this.leaderboardPanel) this.leaderboardPanel.classList.remove('hidden');
+    this._positionLeaderboardWindow();
     if (page === 'username') {
       this._showLeaderboard(this._lbRequestMode || 'infinite');
       if (this.usernameInput) this.usernameInput.focus();
@@ -128,7 +132,21 @@ class Menu {
     this.show('modes');
   }
 
-  hide() { this.el.classList.add('hidden'); }
+  hide() {
+    this.el.classList.add('hidden');
+    if (this.leaderboardPanel) this.leaderboardPanel.classList.add('hidden');
+  }
+
+  // The leaderboard is its own floating window (index.html), not nested inside #menu, so its
+  // size can never affect #menu's - but that means it has to be told where #menu actually is.
+  // Pins its top-left just right of #menu's own rendered box.
+  _positionLeaderboardWindow() {
+    if (!this.leaderboardPanel || !this.el.getBoundingClientRect) return;
+    const rect = this.el.getBoundingClientRect();
+    if (!rect.width) return;   // not laid out yet (e.g. this environment has no real DOM)
+    this.leaderboardPanel.style.left = `${rect.right + 20}px`;
+    this.leaderboardPanel.style.top = `${rect.top}px`;
+  }
 
   _renderLevels() {
     const recs = this.game.levelRecords;

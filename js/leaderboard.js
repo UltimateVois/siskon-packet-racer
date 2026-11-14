@@ -73,10 +73,15 @@ class Leaderboard {
 
     try {
       if (typeof fetch !== 'function') return cached ? cached.rows : [];
+      // Only select the metric column this mode actually ranks by - a column that doesn't
+      // exist yet in the table (e.g. a new metric added before its ALTER TABLE was run) then
+      // only breaks that one mode's panel instead of every mode's (PostgREST rejects the
+      // whole query if any requested column is missing).
       const metric = leaderboardMetric(mode);
       const order = metric === 'time' ? 'time.asc.nullslast'
         : metric === 'distance' ? 'distance.desc.nullslast' : 'score.desc';
-      const url = `${L.supabaseUrl}/rest/v1/${L.table}?select=username,score,time,distance&mode=eq.${encodeURIComponent(mode)}` +
+      const extraCol = metric === 'score' ? '' : `,${metric}`;
+      const url = `${L.supabaseUrl}/rest/v1/${L.table}?select=username,score${extraCol}&mode=eq.${encodeURIComponent(mode)}` +
         `&order=${order}&limit=${limit}`;
       const res = await fetch(url, {
         headers: { apikey: L.supabaseAnonKey, Authorization: `Bearer ${L.supabaseAnonKey}` },
@@ -115,11 +120,12 @@ function leaderboardModeLabel(mode) {
   return String(mode || '').toUpperCase();
 }
 
-// Which field a mode ranks by: Levels by completion time, Infinite by distance covered,
-// everything else by score. Shared by fetchTop() (ordering) and leaderboardValueFn() (display).
+// Which field a mode ranks by: Levels by completion time, Infinite and Progression by distance
+// covered, everything else by score. Shared by fetchTop() (ordering) and leaderboardValueFn()
+// (display).
 function leaderboardMetric(mode) {
   if (/^level\d+$/.test(mode || '')) return 'time';
-  if (mode === 'infinite') return 'distance';
+  if (mode === 'infinite' || mode === 'progression') return 'distance';
   return 'score';
 }
 

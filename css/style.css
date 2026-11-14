@@ -162,12 +162,30 @@ html, body {
   align-self: stretch;
 }
 .leaderboard-panel.hidden { display: none; }
-.leaderboard-panel h2 {
+.leaderboard-panel h2, .leaderboard-window h2 {
   font-size: 12px;
   letter-spacing: 2px;
   color: var(--accent);
   margin-bottom: 10px;
   text-align: center;
+  /* Longer titles ("TOP 10 - PROGRESSION") don't fit this column on one line and would
+     otherwise wrap to two, changing the panel's height depending on which mode is
+     highlighted - clip instead, so the title is always exactly one line tall. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The main menu's leaderboard is its own floating window (js/menu.js positions it just right
+   of #menu via exact top/left px, read from #menu's own rendered rect) instead of sharing
+   #menu's box - so nothing about its size (title, row count) can ever resize the main menu. */
+.leaderboard-window {
+  top: 0;
+  left: 0;
+  transform: none;   /* override .overlay's centering transform; JS sets the real position */
+  width: 200px;
+  padding: 18px 20px;
+  text-align: left;
 }
 .leaderboard-list {
   list-style: none;
@@ -186,9 +204,9 @@ html, body {
 .leaderboard-list .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .leaderboard-list .score { color: #ffe66d; font-weight: bold; white-space: nowrap; }
 
-/* Side-by-side leaderboard panels don't fit a narrow viewport; drop them rather than squeeze */
+/* Side-by-side leaderboard panels/window don't fit a narrow viewport; drop them rather than squeeze */
 @media (max-width: 680px) {
-  .leaderboard-panel { display: none !important; }
+  .leaderboard-panel, .leaderboard-window { display: none !important; }
 }
 
 /* ---------- Jetpack fuel gauge (in the top HUD row) ---------- */

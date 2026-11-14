@@ -180,6 +180,7 @@ class Game {
     this.startX = startX;
     this._runGen = (this._runGen || 0) + 1;
     this.topRunMarkers = [];
+    this.topRankThresholds = [];   // "You're top 3!" etc. - see _loadTopRunMarkers()
     const lbMode = this._leaderboardMode();
     if (leaderboardMetric(lbMode) === 'distance') this._loadTopRunMarkers(lbMode, startX, this._runGen);
     this.truck.reset(startX, this.terrain.heightAt(startX) - 40);
@@ -504,6 +505,13 @@ class Game {
     this.runTime += dt;
     this.comboTimer += dt;
     this.distance = Math.max(this.distance, (this.truck.x - this.startX) / CONFIG.world.pxPerMeter);
+    // Rank-passing popups ("You're top 3!" etc.) for a distance-ranked mode - see _loadTopRunMarkers()
+    for (const t of this.topRankThresholds) {
+      if (!t.shown && this.distance > t.distance) {
+        t.shown = true;
+        this.addPopup(t.text, this.truck.x, this.truck.y - 95, t.color, true);
+      }
+    }
 
     // Progression: collect BTC; every N metres the shop opens
     if (this.isProgression) {
@@ -575,16 +583,22 @@ class Game {
     return this.mode.type === 'level' ? `level${this.mode.index + 1}` : this.mode.type;
   }
 
-  // For a distance-ranked mode (currently just Infinite): fetches the top 10 and turns each
-  // entry's distance into a world x position, so drawDistanceMarkers can show where the best
-  // runs reached, with that player's name. gen guards against a later reset() (retry, mode
-  // switch) finishing first and this stale fetch overwriting its markers once it resolves.
+  // For a distance-ranked mode (Infinite, Progression): fetches the top 10 and turns each
+  // entry's distance into a world x position, so drawTopRunMarkers can show where the best
+  // runs reached, with that player's name. Also sets up the rank-passing popups ("You're top
+  // 3!" etc. - see fixedStep()) from the same 3 best distances. gen guards against a later
+  // reset() (retry, mode switch) finishing first and this stale fetch overwriting things once
+  // it resolves.
   async _loadTopRunMarkers(mode, startX, gen) {
     const rows = await this.leaderboard.fetchTop(mode);
     if (gen !== this._runGen) return;
-    this.topRunMarkers = rows
-      .filter((r) => typeof r.distance === 'number' && r.distance > 0)
-      .map((r) => ({ x: startX + r.distance * CONFIG.world.pxPerMeter, username: r.username }));
+    const ranked = rows.filter((r) => typeof r.distance === 'number' && r.distance > 0);
+    this.topRunMarkers = ranked.map((r) => ({ x: startX + r.distance * CONFIG.world.pxPerMeter, username: r.username }));
+    this.topRankThresholds = [
+      ranked[2] && { distance: ranked[2].distance, text: "You're top 3!", color: '#38e8ff' },
+      ranked[1] && { distance: ranked[1].distance, text: "You're almost #1!", color: '#2ed573' },
+      ranked[0] && { distance: ranked[0].distance, text: 'You are number 1!', color: '#ffe66d' },
+    ].filter(Boolean).map((t) => ({ ...t, shown: false }));
   }
 
   gameOver(title, reason) {
@@ -593,9 +607,9 @@ class Game {
     const lv = this.level;
     const d = Math.floor(this.distance);
     // A failed level attempt has no completion time, so there's nothing a Levels (time-based)
-    // leaderboard entry would mean here - only levelComplete() submits for Levels. Infinite
-    // ranks by distance covered, not points.
-    if (!lv) this.leaderboard.submitRun(mode, this.score, mode === 'infinite' ? { distance: d } : undefined);
+    // leaderboard entry would mean here - only levelComplete() submits for Levels. Infinite and
+    // Progression rank by distance covered, not points.
+    if (!lv) this.leaderboard.submitRun(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined);
     let sub;
     if (lv) {
       sub = `${reason}\nReached ${Math.min(d, lv.length)} / ${lv.length} m`;
