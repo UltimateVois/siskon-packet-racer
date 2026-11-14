@@ -123,9 +123,12 @@ html, body {
 
 /* ---------- Start menu ---------- */
 .overlay.menu { pointer-events: auto; min-width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
-.menu-page.hidden { display: none; }
+/* All three pages are stacked in the same grid cell (never display:none'd) so the menu's size
+   is always the max of modes/levels/username, instead of resizing as you switch between them. */
+.menu-pages { display: grid; }
+.menu-page { grid-row: 1; grid-column: 1; display: flex; flex-direction: column; gap: 10px; }
+.menu-page.hidden { visibility: hidden; pointer-events: none; }
 .menu-page p { margin-bottom: 12px; }
-.menu-page { display: flex; flex-direction: column; gap: 10px; }
 #level-list { display: flex; flex-direction: column; gap: 10px; }
 
 .menu button {
@@ -173,6 +176,8 @@ html, body {
   flex-direction: column;
   gap: 5px;
   font-size: 13px;
+  min-height: 245px;   /* room for a full CONFIG.leaderboard.topCount (10) rows, so a short
+                           list ("No scores yet", fewer entries) doesn't shrink the panel */
 }
 .leaderboard-list li { counter-increment: lb; display: flex; align-items: baseline; gap: 6px; }
 .leaderboard-list li::before { content: counter(lb) '.'; opacity: 0.55; min-width: 1.5em; }

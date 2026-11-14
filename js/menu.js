@@ -63,9 +63,16 @@ class Menu {
     else if (page === 'username') this._openUsernameForm(hasUsername);
     for (const [name, el] of Object.entries(this.pages)) el.classList.toggle('hidden', name !== page);
     this.el.classList.remove('hidden');
-    if (this.leaderboardPanel) this.leaderboardPanel.classList.toggle('hidden', page === 'username');
-    if (page === 'username' && this.usernameInput) this.usernameInput.focus();
-    else { const first = this._buttons()[0]; if (first) first.focus(); }
+    // Always shown, even on the username page - hiding it there used to remove its whole
+    // column from layout, which is what was still changing the menu's width between pages.
+    if (this.leaderboardPanel) this.leaderboardPanel.classList.remove('hidden');
+    if (page === 'username') {
+      this._showLeaderboard(this._lbRequestMode || 'infinite');
+      if (this.usernameInput) this.usernameInput.focus();
+    } else {
+      const first = this._buttons()[0];
+      if (first) first.focus();
+    }
   }
 
   // Which leaderboard mode key a button represents, or null if it doesn't have one (BACK,

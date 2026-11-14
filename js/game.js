@@ -178,6 +178,10 @@ class Game {
     this.droppedPackets = [];      // lost packets left lying around
     this.nextBackupX = startX + CONFIG.backup.every * CONFIG.world.pxPerMeter;
     this.startX = startX;
+    this._runGen = (this._runGen || 0) + 1;
+    this.topRunMarkers = [];
+    const lbMode = this._leaderboardMode();
+    if (leaderboardMetric(lbMode) === 'distance') this._loadTopRunMarkers(lbMode, startX, this._runGen);
     this.truck.reset(startX, this.terrain.heightAt(startX) - 40);
     this.packet.reset(this.truck);
     this.firewall.reset(startX);
@@ -194,7 +198,7 @@ class Game {
         (rec != null ? `Record: ${formatTime(rec)}\n` : '') + '\nHold SPACE to start');
     } else if (this.isHacker) {
       const H = CONFIG.hacker;
-      this.showMessage('HACKER', `No packet - smash routers, switches and computers for points.\n` +
+      this.showMessage('HACKER', `Destroy as many network devices as possible.\n` +
         `${H.startTime} s on the clock, +${H.timeBonus} s every ${H.bonusEvery} m.\n` +
         (this.hackerBest ? `Best: ${this.hackerBest} pts\n` : '') + '\nHold SPACE to start');
     } else if (this.isProgression) {
@@ -571,14 +575,27 @@ class Game {
     return this.mode.type === 'level' ? `level${this.mode.index + 1}` : this.mode.type;
   }
 
+  // For a distance-ranked mode (currently just Infinite): fetches the top 10 and turns each
+  // entry's distance into a world x position, so drawDistanceMarkers can show where the best
+  // runs reached, with that player's name. gen guards against a later reset() (retry, mode
+  // switch) finishing first and this stale fetch overwriting its markers once it resolves.
+  async _loadTopRunMarkers(mode, startX, gen) {
+    const rows = await this.leaderboard.fetchTop(mode);
+    if (gen !== this._runGen) return;
+    this.topRunMarkers = rows
+      .filter((r) => typeof r.distance === 'number' && r.distance > 0)
+      .map((r) => ({ x: startX + r.distance * CONFIG.world.pxPerMeter, username: r.username }));
+  }
+
   gameOver(title, reason) {
     this.state = 'over';
     const mode = this._leaderboardMode();
     const lv = this.level;
-    // A failed level attempt has no completion time, so there's nothing a Levels (time-based)
-    // leaderboard entry would mean here - only levelComplete() submits for Levels.
-    if (!lv) this.leaderboard.submitRun(mode, this.score);
     const d = Math.floor(this.distance);
+    // A failed level attempt has no completion time, so there's nothing a Levels (time-based)
+    // leaderboard entry would mean here - only levelComplete() submits for Levels. Infinite
+    // ranks by distance covered, not points.
+    if (!lv) this.leaderboard.submitRun(mode, this.score, mode === 'infinite' ? { distance: d } : undefined);
     let sub;
     if (lv) {
       sub = `${reason}\nReached ${Math.min(d, lv.length)} / ${lv.length} m`;
@@ -712,6 +729,7 @@ class Game {
     const v = this.view;
     this.terrain.draw(ctx, v);
     this.drawDistanceMarkers(ctx, v);
+    this.drawTopRunMarkers(ctx, v);
     this.drawFinish(ctx, v);
     if (this.isProgression) this.drawShopLine(ctx, v);
     this.world.draw(ctx, v);
@@ -753,6 +771,28 @@ class Game {
       ctx.beginPath(); ctx.moveTo(x, v.y); ctx.lineTo(x, g); ctx.stroke();
       ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.fillText(`${k * 50} m`, x, v.y + 14);
+    }
+    ctx.restore();
+  }
+
+  // For a distance-ranked mode: a vertical line at each of the top 10 players' recorded
+  // distance, labelled with their name, so you can see where the best runs reached as you pass
+  // them. Populated by _loadTopRunMarkers() (see reset()); empty for every other mode.
+  drawTopRunMarkers(ctx, v) {
+    if (!this.topRunMarkers.length) return;
+    ctx.save();
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    for (const m of this.topRunMarkers) {
+      if (m.x < v.x - 40 || m.x > v.x + v.w + 40) continue;
+      const g = this.terrain.heightAt(m.x);
+      ctx.strokeStyle = 'rgba(56, 232, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([2, 5]);
+      ctx.beginPath(); ctx.moveTo(m.x, v.y); ctx.lineTo(m.x, g); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(56, 232, 255, 0.9)';
+      ctx.fillText(m.username, m.x, v.y + 14);
     }
     ctx.restore();
   }
