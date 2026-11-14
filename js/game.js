@@ -15,6 +15,9 @@ class Game {
     this.truck = new Truck();
     this.packet = new Packet();
     this.camera = { x: 0, y: 0 };
+    // Stand-in "truck" for World.step() while the main menu demo background is running (see
+    // startMenuDemo()) - parked far away so it never collides with anything spawned for real.
+    this._menuDemoTruck = { x: -1e6, y: -1e6, sawActive: false };
     // Saved data from an older save version is wiped (records, unlocks)
     if (Storage.get('packetracer.saveVersion', 1) !== CONFIG.saveVersion) {
       Storage.remove('packetracer.best');
@@ -63,6 +66,8 @@ class Game {
     };
     this.shop = new Shop(this);
     this.leaderboard = new Leaderboard();
+    this.eventLog = new EventLog();
+    this.eventLog.log('connect');
     window.addEventListener('resize', () => this.resize());
     this.resize();
     this.reset();
@@ -119,6 +124,7 @@ class Game {
     this.hideMessage();
     this.hideResults();
     this.shop.hide();
+    this.startMenuDemo();
     this.menu.show(page);
   }
 
@@ -129,7 +135,12 @@ class Game {
     this.viewH = window.innerHeight;
     this.canvas.width = Math.floor(this.viewW * dpr);
     this.canvas.height = Math.floor(this.viewH * dpr);
-    this.zoom = clamp(this.viewH / CONFIG.camera.referenceHeight, 0.5, 1.5);
+    // Unclamped: zoom scales exactly with viewH, so view.h below is always exactly
+    // referenceHeight - how far you can see never changes with window size or browser zoom,
+    // only how large everything appears on screen does. (Clamping this let viewH outgrow the
+    // clamp ceiling at extreme window sizes/browser zoom, silently widening the visible area -
+    // and with it, how much terrain/props got streamed in and rendered.)
+    this.zoom = Math.max(1, this.viewH) / CONFIG.camera.referenceHeight;
   }
 
   get view() {
@@ -244,6 +255,7 @@ class Game {
     if (this.state === 'ready' && (inp.pressed('Space') || inp.pressed('ArrowUp'))) {
       this.state = 'running';
       this.hideMessage();
+      this.eventLog.log('mode_start', this._leaderboardMode());
     } else if (this.state === 'running' && inp.pressed('KeyP')) {
       this.paused = !this.paused;
       this.paused ? this.showMessage('PAUSED', 'Press P to continue') : this.hideMessage();
@@ -256,6 +268,7 @@ class Game {
   }
 
   update(dt) {
+    if (this.state === 'menu') { this._updateMenuDemo(dt); return; }
     const step = CONFIG.physics.dt;
     this.accumulator += dt;
     let steps = 0;
@@ -281,6 +294,49 @@ class Game {
     this.coins.prune(v.x - 800);
 
     this._updateCamera(dt);
+  }
+
+  // Main menu demo background: resets terrain/world/spawner for a fresh randomized scene and
+  // parks the camera at its start (fixed for the whole demo - it never moves vertically).
+  // Reuses the same instances reset() uses for the next real run - harmless, since reset()
+  // always reinitializes them again once a mode is actually picked. Called from openMenu(), so
+  // it restarts every time the player lands back on the main menu.
+  startMenuDemo() {
+    this.mode = { type: 'infinite' };   // normal Infinite device-spawn rules
+    this.terrain.reset(CONFIG.infinite.difficultyBase);
+    this.world.reset();
+    this.spawner.reset(CONFIG.infinite, Infinity);
+    this.powerups.reset();   // no power-ups spawn in the demo; just clearing any stale state
+    this.finishX = Infinity;
+    this.camera.x = 0;
+    this.camera.y = this.terrain.heightAt(0) - CONFIG.menuDemo.cameraYOffset;
+    this.terrain.ensure(this.camera.x + this.view.w + 3000);
+    this._spawnMenuDemoBars();
+  }
+
+  // The demo's own per-frame update: the camera scrolls right on its own (no truck to follow,
+  // no vertical movement), over normal terrain and spawned devices/cables/shelves - no
+  // power-ups - streamed in and settled exactly like a real run, just with no truck or packet
+  // taking part.
+  _updateMenuDemo(dt) {
+    this.camera.x += CONFIG.menuDemo.scrollSpeed * dt;
+
+    this.world.step(dt, this._menuDemoTruck, this.terrain, CONFIG.physics.gravity);
+    this.world.updateEffects(dt, this.terrain, CONFIG.physics.gravity);
+
+    const v = this.view;
+    this.terrain.ensure(v.x + v.w + 3000);
+    this._spawnMenuDemoBars();
+    this.terrain.prune(v.x - 800);
+    this.world.prune(v.x - 800);
+  }
+
+  // Like _spawnOnNewBars(), but devices/cables/shelves only - no power-ups, backups or coins
+  // (nothing in the demo could ever collect them). Still has to drain terrain.newBars itself,
+  // since nothing else does while the demo is running.
+  _spawnMenuDemoBars() {
+    this.spawner.update(this.terrain);
+    this.terrain.newBars.length = 0;
   }
 
   _spawnOnNewBars() {
@@ -335,7 +391,7 @@ class Game {
       this._log('combo', b - S.brutalBonus, false);
       this.world.sparks.burst(p.x, p.y, S.brutalSparks, 150, 520);
     }
-    if (this.combo > 1) this.addPopup(`COMBO ×${this.combo.toFixed(1)}`, p.x, p.y - 56, '#38e8ff');
+    if (this.combo > 1) this.addPopup(`COMBO ×${this.combo.toFixed(1)}`, p.x, p.y - 56, '#5eeb95');
     this.destroyedCount++;
     const H = CONFIG.hacker;
     if (this.isHacker && this.destroyedCount % H.angerEvery === 0) {
@@ -410,7 +466,7 @@ class Game {
         x = lerp(sx, target.x, e); y = lerp(sy, target.y, e);
         size = lerp(15, 10, e);
       }
-      ctx.font = `bold ${size.toFixed(1)}px monospace`;
+      ctx.font = `bold ${size.toFixed(1)}px 'Pixel12x10', monospace`;
       ctx.strokeText(f.text, x, y);
       ctx.fillStyle = f.color;
       ctx.fillText(f.text, x, y);
@@ -432,7 +488,7 @@ class Game {
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
     for (const p of this.popups) {
-      ctx.font = `bold ${p.big ? 20 : 14}px monospace`;
+      ctx.font = `bold ${p.big ? 20 : 14}px 'Pixel12x10', monospace`;
       const k = p.t / p.life;
       const y = p.y - 18 - CONFIG.popups.rise * (1 - Math.pow(1 - k, 2));   // eases out as it rises
       ctx.globalAlpha = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
@@ -595,7 +651,7 @@ class Game {
     const ranked = rows.filter((r) => typeof r.distance === 'number' && r.distance > 0);
     this.topRunMarkers = ranked.map((r) => ({ x: startX + r.distance * CONFIG.world.pxPerMeter, username: r.username }));
     this.topRankThresholds = [
-      ranked[2] && { distance: ranked[2].distance, text: "You're top 3!", color: '#38e8ff' },
+      ranked[2] && { distance: ranked[2].distance, text: "You're top 3!", color: '#5eeb95' },
       ranked[1] && { distance: ranked[1].distance, text: "You're almost #1!", color: '#2ed573' },
       ranked[0] && { distance: ranked[0].distance, text: 'You are number 1!', color: '#ffe66d' },
     ].filter(Boolean).map((t) => ({ ...t, shown: false }));
@@ -606,10 +662,14 @@ class Game {
     const mode = this._leaderboardMode();
     const lv = this.level;
     const d = Math.floor(this.distance);
+    this.eventLog.log('mode_finish', mode);
     // A failed level attempt has no completion time, so there's nothing a Levels (time-based)
     // leaderboard entry would mean here - only levelComplete() submits for Levels. Infinite and
     // Progression rank by distance covered, not points.
-    if (!lv) this.leaderboard.submitRun(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined);
+    if (!lv) {
+      this.leaderboard.submitRun(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined);
+      this.eventLog.log('score_upload', mode);
+    }
     let sub;
     if (lv) {
       sub = `${reason}\nReached ${Math.min(d, lv.length)} / ${lv.length} m`;
@@ -692,7 +752,9 @@ class Game {
   levelComplete() {
     this.state = 'complete';
     const mode = this._leaderboardMode();
+    this.eventLog.log('mode_finish', mode);
     this.leaderboard.submitRun(mode, this.score, { time: this.runTime });
+    this.eventLog.log('score_upload', mode);
     const i = this.mode.index, lv = this.level, t = this.runTime;
     const prev = this.levelRecords[i];
     let sub = `Time: ${formatTime(t)}  ·  Score: ${this.score}`;
@@ -736,6 +798,7 @@ class Game {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawBackground(ctx);
+    if (this.state === 'menu') { this._renderMenuDemo(ctx); return; }
 
     ctx.save();
     ctx.scale(this.zoom, this.zoom);
@@ -767,6 +830,18 @@ class Game {
     if (this.debug) this.drawDebug(ctx);
   }
 
+  // Main menu demo background: just the terrain, props/cables and power-ups scrolling by - no
+  // truck, no packet, and none of the HUD-ish overlays (firewall, popups, fuel bar, ...).
+  _renderMenuDemo(ctx) {
+    ctx.save();
+    ctx.scale(this.zoom, this.zoom);
+    ctx.translate(-this.camera.x, -this.camera.y);
+    const v = this.view;
+    this.terrain.draw(ctx, v);
+    this.world.draw(ctx, v);
+    ctx.restore();
+  }
+
   // Faint vertical lines across the world every 50 m, each labelled with its running total -
   // a visual ruler for how far the run has gone (every mode; drawn under props/truck).
   drawDistanceMarkers(ctx, v) {
@@ -775,7 +850,7 @@ class Game {
     const lastK = Math.floor((v.x + v.w - this.startX) / stepPx);
     if (lastK < firstK) return;
     ctx.save();
-    ctx.font = '11px monospace';
+    ctx.font = "11px 'Pixel12x10', monospace";
     ctx.textAlign = 'center';
     for (let k = firstK; k <= lastK; k++) {
       const x = this.startX + k * stepPx;
@@ -795,7 +870,7 @@ class Game {
   drawTopRunMarkers(ctx, v) {
     if (!this.topRunMarkers.length) return;
     ctx.save();
-    ctx.font = 'bold 12px monospace';
+    ctx.font = "bold 12px 'Pixel12x10', monospace";
     ctx.textAlign = 'center';
     for (const m of this.topRunMarkers) {
       if (m.x < v.x - 40 || m.x > v.x + v.w + 40) continue;
@@ -826,7 +901,7 @@ class Game {
     const y = (this.truck.y - this.camera.y) * this.zoom;
 
     ctx.save();
-    ctx.font = 'bold 15px monospace';
+    ctx.font = "bold 15px 'Pixel12x10', monospace";
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 3;
@@ -905,7 +980,7 @@ class Game {
     ctx.save();
     const clock = this.sysadminFound ? performance.now() / 1000 : t;   // keep blinking once the clock is frozen at 0
     ctx.globalAlpha = (low && this.state === 'running' && Math.floor(clock * 4) % 2 === 0) ? 0.55 : 0.9;
-    ctx.font = 'bold 16px monospace';
+    ctx.font = "bold 16px 'Pixel12x10', monospace";
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // no frame: just the text, with a dark outline so it stays readable
@@ -943,10 +1018,10 @@ class Game {
         drawSawBlade(ctx, x, y, r * 0.7, performance.now() / 60, s.color);
       } else {
         ctx.fillStyle = s.color;
-        ctx.font = `bold ${s.label.length > 1 ? 8 : 13}px monospace`;
+        ctx.font = `bold ${s.label.length > 1 ? 8 : 13}px 'Pixel12x10', monospace`;
         ctx.fillText(s.label, x, y + 1);
       }
-      ctx.font = 'bold 9px monospace';
+      ctx.font = "bold 9px 'Pixel12x10', monospace";
       ctx.fillStyle = '#e8f0ff';
       ctx.fillText(left.toFixed(1), x, y + r + 9);
     });
@@ -977,7 +1052,7 @@ class Game {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x - 38, by - 14, 76, 24);
     ctx.fillStyle = '#f7931a';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = "bold 14px 'Pixel12x10', monospace";
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('₿ SHOP', x, by - 2);
@@ -1003,8 +1078,8 @@ class Game {
         ctx.fillRect(x + 3 + c * cs, top + r * cs, cs, cs);
       }
     }
-    ctx.fillStyle = '#38e8ff';
-    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = '#5eeb95';
+    ctx.font = "bold 14px 'Pixel12x10', monospace";
     ctx.textAlign = 'left';
     ctx.fillText('DESTINATION', x - 3, top - 8);
   }
@@ -1018,7 +1093,7 @@ class Game {
       `points ${this.terrain.points.length}  props ${this.world.props.length}  cables ${this.world.cables.length}  shelves ${this.world.shelves.length}`,
     ];
     ctx.fillStyle = '#ff0';
-    ctx.font = '12px monospace';
+    ctx.font = "12px 'Pixel12x10', monospace";
     lines.forEach((l, i) => ctx.fillText(l, 12, this.viewH - 70 + i * 15));
   }
 

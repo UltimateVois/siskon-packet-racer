@@ -187,7 +187,7 @@ class Hub extends Prop {
       ctx.fillRect(p.x - 2, p.y + 5, 3, 2);
     }
     ctx.fillStyle = '#ffa502';
-    ctx.font = '5px monospace';
+    ctx.font = "5px 'Pixel12x10', monospace";
     ctx.fillText('1', this.ports[0].x - 2, h / 2 - 1);
   }
 }

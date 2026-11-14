@@ -5,7 +5,7 @@ const POWERUP_STYLES = {
   gravHalf:    { color: '#2ed573', label: 'G½',   name: 'HALF GRAVITY!' },
   bigTires:    { color: '#ff9ff3', label: '◎',    name: 'BIG TIRES!' },
   sirkkeli:    { color: '#dfe6ee', label: '', saw: true, name: 'SIRKKELI!' },   // buzzsaw (drawn, not text)
-  backup:      { color: '#38e8ff', label: '+PKT', name: '+1 BACKUP PACKET' },
+  backup:      { color: '#5eeb95', label: '+PKT', name: '+1 BACKUP PACKET' },
 };
 
 class PowerUp {
@@ -40,7 +40,7 @@ class PowerUp {
       drawSawBlade(ctx, 0, 0, r * 0.75, this.t * 6, s.color);
     } else {
       ctx.fillStyle = s.color;
-      ctx.font = `bold ${s.label.length > 3 ? 8 : s.label.length > 1 ? 10 : 18}px monospace`;
+      ctx.font = `bold ${s.label.length > 3 ? 8 : s.label.length > 1 ? 10 : 18}px 'Pixel12x10', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(s.label, 0, 1);

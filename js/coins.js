@@ -26,14 +26,14 @@ class Coin {
     ctx.stroke();
     if (squash > 0.55) {
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${Math.round(r * 1.3)}px monospace`;
+      ctx.font = `bold ${Math.round(r * 1.3)}px 'Pixel12x10', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('₿', 0, 1);
     }
     if (this.value > 1) {
       ctx.fillStyle = '#ffe2a8';
-      ctx.font = 'bold 8px monospace';
+      ctx.font = "bold 8px 'Pixel12x10', monospace";
       ctx.textAlign = 'center';
       ctx.fillText('×2', 0, -r - 5);
     }

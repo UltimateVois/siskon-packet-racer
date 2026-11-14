@@ -1,6 +1,6 @@
 // All tunable numbers live here. Units: pixels, seconds. World y grows DOWN (canvas style).
 const CONFIG = {
-  version: 'a0.2.3',      // game version (shown in the main menu; see CHANGELOG.md)
+  version: 'a0.2.4',      // game version (shown in the main menu; see CHANGELOG.md)
   saveVersion: 2,         // bump to wipe saved records/unlocks on next load
 
   // Player identity (js/identity.js): a chosen username + a stable anonymous playerId.
@@ -23,6 +23,15 @@ const CONFIG = {
     toastTime: 4,             // seconds the "couldn't upload score" notice stays on screen
     topCount: 10,             // how many rows the top-scores panels show
     topCacheTime: 20,         // seconds a fetched top-scores list is reused before refetching
+  },
+
+  // Event log (js/eventlog.js): session/gameplay events (connect, username changes, run
+  // start/finish, score uploads) logged to their own Supabase table, kept fully independent of
+  // the leaderboard service/code - it just reuses leaderboard's supabaseUrl/supabaseAnonKey
+  // above, since both tables live in the same Supabase project.
+  eventLog: {
+    enabled: true,      // master switch; false disables all event-log network calls
+    table: 'event_log', // table that receives event rows
   },
 
   physics: {
@@ -59,7 +68,7 @@ const CONFIG = {
     leadY: 0.6,
     lookAhead: 0.25,      // seconds of velocity to look ahead
     smoothing: 5,
-    referenceHeight: 650, // zoom = screenHeight / referenceHeight (clamped)
+    referenceHeight: 650, // world units always visible vertically (view.h); zoom = screenHeight / this
   },
 
   truck: {
@@ -337,6 +346,14 @@ const CONFIG = {
   infinite: {
     difficultyBase: 0,
     floorChance: { router: 0.75, hub: 0.75, computer: 0.75 },
+  },
+
+  // Main menu demo background (js/game.js's startMenuDemo()/_updateMenuDemo()): the camera
+  // scrolls right on its own at this speed (camera.y stays fixed) over a normal (reuses
+  // CONFIG.infinite's rules, minus power-ups) randomly generated world - no truck or packet.
+  menuDemo: {
+    scrollSpeed: 18.75,   // px/s
+    cameraYOffset: 330,   // px above ground level the (fixed) camera sits
   },
 
   // Level mode. A level must be beaten to unlock the next. Office supplies are always on shelves.

@@ -20,6 +20,10 @@ class Menu {
     this.leaderboardTitle = document.getElementById('menu-leaderboard-title');
     this.leaderboardList = document.getElementById('menu-leaderboard-list');
     this._lbRequestMode = null;
+    this.changelogPanel = document.getElementById('menu-changelog');
+    this.changelogVersion = document.getElementById('changelog-version');
+    this.changelogBody = document.getElementById('changelog-body');
+    this._renderChangelog();
     const v = document.getElementById('menu-version');
     if (v) v.textContent = `version ${CONFIG.version}`;
 
@@ -50,9 +54,12 @@ class Menu {
       const b = e.target.closest('button');
       if (b) this._highlightLeaderboardFor(b);
     });
-    // It's a separate floating window (see index.html), so it has to be told where #menu
-    // actually ended up - keep it pinned alongside it if the browser window resizes.
-    window.addEventListener('resize', () => this._positionLeaderboardWindow());
+    // Both are separate floating windows (see index.html), so they have to be told where
+    // #menu actually ended up - keep them pinned alongside it if the browser window resizes.
+    window.addEventListener('resize', () => {
+      this._positionLeaderboardWindow();
+      this._positionChangelogWindow();
+    });
   }
 
   get visible() { return !this.el.classList.contains('hidden'); }
@@ -69,7 +76,9 @@ class Menu {
     // Always shown, even on the username page - hiding it there used to remove it from the
     // page entirely, which (back when it shared #menu's box) changed the menu's width.
     if (this.leaderboardPanel) this.leaderboardPanel.classList.remove('hidden');
+    if (this.changelogPanel) this.changelogPanel.classList.remove('hidden');
     this._positionLeaderboardWindow();
+    this._positionChangelogWindow();
     if (page === 'username') {
       this._showLeaderboard(this._lbRequestMode || 'infinite');
       if (this.usernameInput) this.usernameInput.focus();
@@ -129,12 +138,14 @@ class Menu {
       }
       return;
     }
+    this.game.eventLog.log('username_set');
     this.show('modes');
   }
 
   hide() {
     this.el.classList.add('hidden');
     if (this.leaderboardPanel) this.leaderboardPanel.classList.add('hidden');
+    if (this.changelogPanel) this.changelogPanel.classList.add('hidden');
   }
 
   // The leaderboard is its own floating window (index.html), not nested inside #menu, so its
@@ -146,6 +157,39 @@ class Menu {
     if (!rect.width) return;   // not laid out yet (e.g. this environment has no real DOM)
     this.leaderboardPanel.style.left = `${rect.right + 20}px`;
     this.leaderboardPanel.style.top = `${rect.top}px`;
+  }
+
+  // Same idea, mirrored to the left. changelogWidth must match .changelog-window's CSS width -
+  // measuring the (possibly still-hidden) element itself isn't reliable, so it's a shared constant.
+  _positionChangelogWindow() {
+    if (!this.changelogPanel || !this.el.getBoundingClientRect) return;
+    const rect = this.el.getBoundingClientRect();
+    if (!rect.width) return;
+    const changelogWidth = 280;
+    this.changelogPanel.style.left = `${rect.left - changelogWidth - 20}px`;
+    this.changelogPanel.style.top = `${rect.top}px`;
+  }
+
+  // Fills the Changelog window from CHANGELOG_CURRENT (below) - static content, rendered once.
+  // Built with createElement/textContent, not innerHTML, for the same reason the leaderboard
+  // rows are (see utils.js's renderLeaderboardRows) - force of habit here since this text is
+  // actually trusted, but it costs nothing and keeps the pattern consistent.
+  _renderChangelog() {
+    if (this.changelogVersion) this.changelogVersion.textContent = CONFIG.version;
+    if (!this.changelogBody) return;
+    this.changelogBody.innerHTML = '';
+    for (const group of CHANGELOG_CURRENT) {
+      const h3 = document.createElement('h3');
+      h3.textContent = group.title;
+      this.changelogBody.appendChild(h3);
+      const ul = document.createElement('ul');
+      for (const item of group.items) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        ul.appendChild(li);
+      }
+      this.changelogBody.appendChild(ul);
+    }
   }
 
   _renderLevels() {
@@ -180,3 +224,27 @@ class Menu {
 }
 
 function formatTime(sec) { return sec.toFixed(2) + ' s'; }
+
+// This version's changelog, shown in the main menu's Changelog window (js/menu.js's
+// _renderChangelog()). Kept in sync by hand with CHANGELOG.md's latest entry - fetching that
+// file doesn't work when the game is run via a plain file:// open, with no server (see
+// CLAUDE.md's golden rule on no build step/no server).
+const CHANGELOG_CURRENT = [
+  { title: 'World', items: [
+    'You now receive floating text when passing top 3 players.',
+  ] },
+  { title: 'Fixed', items: [
+    "The camera's visible distance no longer grows at extreme window sizes or when the browser " +
+      'itself is zoomed out.',
+  ] },
+  { title: 'Event log', items: [
+    'Added some minor logging to SQL server for statistics.',
+  ] },
+  { title: 'Changed', items: [
+    'Text selection and the browser right-click menu are disabled (except typing in the ' +
+      'username field).',
+    'added background demo you are probably seeing right now.',
+    'Added changelog. hello world!',
+    'Changed UI to look way prettier.',
+  ] },
+];

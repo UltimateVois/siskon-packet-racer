@@ -126,11 +126,11 @@ class Packet {
     ctx.strokeRect(-h, -h, h * 2, h * 2);
     ctx.setLineDash([]);
     ctx.fillStyle = '#d6e6ff';
-    ctx.font = 'bold 7px monospace';
+    ctx.font = "bold 7px 'Pixel12x10', monospace";
     ctx.textAlign = 'center';
     ctx.fillText('PKT', 0, 3);
     if (count > 1) {
-      ctx.font = 'bold 8px monospace';
+      ctx.font = "bold 8px 'Pixel12x10', monospace";
       ctx.fillText('×' + count, 0, -h - 3);
     }
     ctx.restore();
@@ -150,7 +150,7 @@ class Packet {
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#0b1020';
     ctx.fillRect(-h, -h, h * 2, 5);           // header
-    ctx.font = 'bold 7px monospace';
+    ctx.font = "bold 7px 'Pixel12x10', monospace";
     ctx.textAlign = 'center';
     ctx.fillText('PKT', 0, 5);
     ctx.restore();
