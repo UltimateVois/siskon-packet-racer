@@ -35,6 +35,29 @@ html, body {
   user-select: none;
 }
 
+/* ---------- Scrollbars ---------- */
+/* Matches the floating windows' own palette (dark green track, light green handle) instead of
+   the browser default, on whichever overlay happens to overflow (.overlay.menu, .changelog-window,
+   .overlay.results, ...) - a thick, square-cornered block, no rounding anywhere. */
+* {
+  scrollbar-width: auto;   /* Firefox has no numeric width - "auto" is the thicker of its two options */
+  scrollbar-color: var(--button-green) var(--window-bg);
+}
+*::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--window-bg);
+  border-radius: 0;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--button-green);
+  border: 3px solid var(--window-bg);   /* inset so the handle reads as a solid block, not a bar flush with the track */
+  border-radius: 0;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
 #game {
   display: block;
   width: 100vw;
@@ -192,6 +215,23 @@ html, body {
   text-overflow: ellipsis;
 }
 
+/* A mode button's description, shown on hover and following the mouse cursor (js/menu.js
+   repositions it on every mousemove) instead of as permanent <small> subtext under the button -
+   so the menu's height no longer depends on how long these descriptions are. */
+.mode-tooltip {
+  top: 0;
+  left: 0;
+  transform: none;   /* override .overlay's centering transform; JS sets the real position */
+  width: 220px;
+  padding: 10px 14px;
+  text-align: left;
+  /* No other overlay sets a z-index (so they stack by DOM order, earliest-behind) - this one
+     needs to always be on top since it follows the cursor over whichever window is beneath it,
+     regardless of where it sits in the markup. */
+  z-index: 50;
+}
+.mode-tooltip p { font-size: 12px; opacity: 0.9; }
+
 /* The main menu's leaderboard is its own floating window (js/menu.js positions it just right
    of #menu via exact top/left px, read from #menu's own rendered rect) instead of sharing
    #menu's box - so nothing about its size (title, row count) can ever resize the main menu. */
@@ -243,15 +283,25 @@ html, body {
   font-size: 11px;
   letter-spacing: 1px;
   color: var(--fg);
-  background: rgba(56, 232, 255, 0.08);
-  border: 1px solid rgba(56, 232, 255, 0.45);
-  border-radius: 4px;
+  background: rgba(94, 235, 149, 0.1);
+  border: 1px solid rgba(94, 235, 149, 0.5);
+  border-radius: 2px;
   padding: 4px 8px;
   text-decoration: none;
   white-space: nowrap;
 }
-.changelog-github:hover, .changelog-github:focus-visible { background: rgba(56, 232, 255, 0.22); border-color: var(--accent); outline: none; }
-.changelog-version { font-size: 11px; opacity: 0.5; text-align: center; margin-bottom: 10px; }
+.changelog-github:hover, .changelog-github:focus-visible { background: rgba(94, 235, 149, 0.25); border-color: var(--button-green); outline: none; }
+/* One heading per version in the scrollable list (js/menu.js's CHANGELOG_VERSIONS), newest
+   first - a divider line separates each from the next (older) one, except above the first. */
+.changelog-body .version-heading {
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin: 18px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(56, 232, 255, 0.25);
+}
+.changelog-body .version-heading:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .changelog-body h3 {
   font-size: 11px;
   letter-spacing: 1px;
@@ -259,7 +309,6 @@ html, body {
   opacity: 0.8;
   margin: 10px 0 4px;
 }
-.changelog-body h3:first-child { margin-top: 0; }
 .changelog-body ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .changelog-body li { font-size: 12px; line-height: 1.4; opacity: 0.9; padding-left: 11px; position: relative; }
 .changelog-body li::before { content: '-'; position: absolute; left: 0; opacity: 0.5; }
@@ -301,16 +350,7 @@ html, body {
 /* Controls panel under the main menu */
 .menu-controls {
   margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(56, 232, 255, 0.25);
   text-align: left;
-}
-.menu-controls h2 {
-  font-size: 13px;
-  letter-spacing: 3px;
-  color: var(--accent);
-  margin-bottom: 8px;
-  text-align: center;
 }
 .controls-grid {
   display: grid;
@@ -382,6 +422,16 @@ kbd {
 #menu-username input:focus { outline: none; border-color: var(--accent); }
 .menu-error { color: var(--warn) !important; font-size: 12px !important; opacity: 1 !important; text-align: left; }
 .menu-error.hidden { display: none; }
+
+/* ---------- First-visit nudge: slow pulsing golden outglow on the Levels button ---------- */
+/* #ffe66d is the same gold used for leaderboard scores (.leaderboard-list .score) and the HUD
+   score tile (#stat-score .value) - reused here so the nudge reads as "this matters" the same
+   way those do. */
+@keyframes levels-glow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 230, 109, 0.3); }
+  50% { box-shadow: 0 0 18px 5px rgba(255, 230, 109, 0.9); }
+}
+.menu button.pulse-highlight { animation: levels-glow 2.6s ease-in-out infinite; }
 
 /* ---------- Guest score-submission prompt ---------- */
 #guest-submit-choice, #guest-submit-form { display: flex; flex-direction: column; gap: 10px; }

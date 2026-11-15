@@ -17,14 +17,25 @@ class Menu {
     this.usernameSkip = document.getElementById('username-skip');
     this.usernameForced = true;
     this.page = 'modes';
+    // First-visit nudge: a slow pulsing golden outglow on the LEVELS button (now first in the
+    // mode list), shown for this whole first visit and never again once a later visit (i.e. a
+    // fresh page load) sees the flag already set - cleared early, on this same visit, as soon
+    // as the player actually starts level 1 (see Game.startLevel()'s clearLevelsHighlight() call).
+    this.levelsButton = this.pages.modes.querySelector('[data-mode="levels"]');
+    const seenLevelsHighlight = Storage.get('packetracer.seenLevelsHighlight', false);
+    if (!seenLevelsHighlight) {
+      Storage.set('packetracer.seenLevelsHighlight', true);
+      if (this.levelsButton) this.levelsButton.classList.add('pulse-highlight');
+    }
     this.leaderboardPanel = document.getElementById('menu-leaderboard');
     this.leaderboardTitle = document.getElementById('menu-leaderboard-title');
     this.leaderboardList = document.getElementById('menu-leaderboard-list');
     this._lbRequestMode = null;
     this.changelogPanel = document.getElementById('menu-changelog');
-    this.changelogVersion = document.getElementById('changelog-version');
     this.changelogBody = document.getElementById('changelog-body');
     this._renderChangelog();
+    this.modeTooltip = document.getElementById('menu-mode-tooltip');
+    this.modeTooltipText = document.getElementById('menu-mode-tooltip-text');
     const v = document.getElementById('menu-version');
     if (v) v.textContent = `version ${CONFIG.version}`;
 
@@ -55,6 +66,18 @@ class Menu {
     this.el.addEventListener('mouseover', (e) => {
       const b = e.target.closest('button');
       if (b) this._highlightLeaderboardFor(b);
+      if (b && b.dataset.desc) this._showModeTooltip(b, e);
+    });
+    // The mode-description tooltip only follows mouse hover (not keyboard focus) - it hides as
+    // soon as the mouse leaves a described button for anything else, including another button.
+    this.el.addEventListener('mouseout', (e) => {
+      const b = e.target.closest('button');
+      const to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('button') : null;
+      if (b && b.dataset.desc && to !== b) this._hideModeTooltip();
+    });
+    // While shown, the tooltip tracks the cursor instead of staying pinned to the button.
+    this.el.addEventListener('mousemove', (e) => {
+      if (this.modeTooltip && !this.modeTooltip.classList.contains('hidden')) this._positionModeTooltip(e.clientX, e.clientY);
     });
     // Both are separate floating windows (see index.html), so they have to be told where
     // #menu actually ended up - keep them pinned alongside it if the browser window resizes.
@@ -67,6 +90,7 @@ class Menu {
   get visible() { return !this.el.classList.contains('hidden'); }
 
   show(page = 'modes') {
+    this._hideModeTooltip();
     const hasUsername = !!Identity.getUsername();
     if (!hasUsername && page !== 'username') page = 'username';
     this.page = page;
@@ -118,6 +142,10 @@ class Menu {
     renderLeaderboardRows(this.leaderboardList, rows, valueFn);
   }
 
+  clearLevelsHighlight() {
+    if (this.levelsButton) this.levelsButton.classList.remove('pulse-highlight');
+  }
+
   _refreshUsernameBanner() {
     if (this.usernameDisplay) this.usernameDisplay.textContent = Identity.getUsername() || '';
   }
@@ -158,6 +186,28 @@ class Menu {
     this.el.classList.add('hidden');
     if (this.leaderboardPanel) this.leaderboardPanel.classList.add('hidden');
     if (this.changelogPanel) this.changelogPanel.classList.add('hidden');
+    this._hideModeTooltip();
+  }
+
+  // A mode button's description (see index.html's data-desc) - its own small floating window
+  // (like the leaderboard/changelog ones) so the menu's own height never depends on how long
+  // any description is. Follows the mouse cursor (see the mousemove listener above) rather
+  // than staying pinned to the button.
+  _showModeTooltip(b, e) {
+    if (!this.modeTooltip || !this.modeTooltipText) return;
+    this.modeTooltipText.textContent = b.dataset.desc;
+    this.modeTooltip.classList.remove('hidden');
+    this._positionModeTooltip(e.clientX, e.clientY);
+  }
+
+  _positionModeTooltip(x, y) {
+    if (!this.modeTooltip) return;
+    this.modeTooltip.style.left = `${x + 18}px`;
+    this.modeTooltip.style.top = `${y + 18}px`;
+  }
+
+  _hideModeTooltip() {
+    if (this.modeTooltip) this.modeTooltip.classList.add('hidden');
   }
 
   // The leaderboard is its own floating window (index.html), not nested inside #menu, so its
@@ -172,7 +222,10 @@ class Menu {
   }
 
   // Same idea, mirrored to the left. changelogWidth must match .changelog-window's CSS width -
-  // measuring the (possibly still-hidden) element itself isn't reliable, so it's a shared constant.
+  // measuring the (possibly still-hidden) element itself isn't reliable, so it's a shared
+  // constant. Height is pinned to match #menu's own rendered height exactly (overridden here
+  // every time, so it keeps tracking #menu as its content/page changes), with its own
+  // overflow-y:auto (css/style.css) scrolling whatever changelog content doesn't fit.
   _positionChangelogWindow() {
     if (!this.changelogPanel || !this.el.getBoundingClientRect) return;
     const rect = this.el.getBoundingClientRect();
@@ -180,27 +233,35 @@ class Menu {
     const changelogWidth = 280;
     this.changelogPanel.style.left = `${rect.left - changelogWidth - 20}px`;
     this.changelogPanel.style.top = `${rect.top}px`;
+    this.changelogPanel.style.height = `${rect.height}px`;
   }
 
-  // Fills the Changelog window from CHANGELOG_CURRENT (below) - static content, rendered once.
+  // Fills the Changelog window from CHANGELOG_VERSIONS (below) - static content, rendered once.
+  // Every past version is listed, newest first, so older ones sit further down; the window's
+  // own max-height + overflow-y:auto (css/style.css's .changelog-window) makes that scrollable.
   // Built with createElement/textContent, not innerHTML, for the same reason the leaderboard
   // rows are (see utils.js's renderLeaderboardRows) - force of habit here since this text is
   // actually trusted, but it costs nothing and keeps the pattern consistent.
   _renderChangelog() {
-    if (this.changelogVersion) this.changelogVersion.textContent = CONFIG.version;
     if (!this.changelogBody) return;
     this.changelogBody.innerHTML = '';
-    for (const group of CHANGELOG_CURRENT) {
-      const h3 = document.createElement('h3');
-      h3.textContent = group.title;
-      this.changelogBody.appendChild(h3);
-      const ul = document.createElement('ul');
-      for (const item of group.items) {
-        const li = document.createElement('li');
-        li.textContent = item;
-        ul.appendChild(li);
+    for (const v of CHANGELOG_VERSIONS) {
+      const heading = document.createElement('h2');
+      heading.className = 'version-heading';
+      heading.textContent = v.version;
+      this.changelogBody.appendChild(heading);
+      for (const group of v.groups) {
+        const h3 = document.createElement('h3');
+        h3.textContent = group.title;
+        this.changelogBody.appendChild(h3);
+        const ul = document.createElement('ul');
+        for (const item of group.items) {
+          const li = document.createElement('li');
+          li.textContent = item;
+          ul.appendChild(li);
+        }
+        this.changelogBody.appendChild(ul);
       }
-      this.changelogBody.appendChild(ul);
     }
   }
 
@@ -237,26 +298,86 @@ class Menu {
 
 function formatTime(sec) { return sec.toFixed(2) + ' s'; }
 
-// This version's changelog, shown in the main menu's Changelog window (js/menu.js's
-// _renderChangelog()). Kept in sync by hand with CHANGELOG.md's latest entry - fetching that
-// file doesn't work when the game is run via a plain file:// open, with no server (see
-// CLAUDE.md's golden rule on no build step/no server).
-const CHANGELOG_CURRENT = [
-  { title: 'World', items: [
-    'You now receive floating text when passing top 3 players.',
+// Every version's changelog, newest first, shown in the main menu's Changelog window
+// (js/menu.js's _renderChangelog()) - older versions sit further down, scrollable via that
+// window's own overflow-y:auto. Kept in sync by hand with CHANGELOG.md (condensed to short
+// bullets here, same as before) - fetching that file doesn't work when the game is run via a
+// plain file:// open, with no server (see CLAUDE.md's golden rule on no build step/no server).
+const CHANGELOG_VERSIONS = [
+  { version: 'a0.2.6', groups: [
+    { title: 'Main menu', items: [
+      'Reordered mode buttons and cleaned up the main menu.',
+    ] },
+    { title: 'Guest mode', items: [
+      'SKIP on the first username prompt lets you play right away as a guest.',
+      'Finishing a run as a guest asks "Submit score?" before posting anything.',
+    ] },
+    { title: 'Leaderboard', items: [
+      'Top-10 panels and top-run markers now show one entry per player, not per run.',
+    ] },
+    { title: 'Hacker results', items: [
+      'Scoreboard rows renamed: Routers/Switches/Computers, Ethernet Cables, Brutal smashes, ' +
+        'Shelf bonuses.',
+    ] },
+    { title: 'Changed', items: [
+      'The Changelog window now scrolls through every past version, oldest at the bottom.',
+    ] },
   ] },
-  { title: 'Fixed', items: [
-    "The camera's visible distance no longer grows at extreme window sizes or when the browser " +
-      'itself is zoomed out.',
+  { version: 'a0.2.4', groups: [
+    { title: 'World', items: [
+      'You now receive floating text when passing top 3 players.',
+    ] },
+    { title: 'Fixed', items: [
+      "The camera's visible distance no longer grows at extreme window sizes or when the browser " +
+        'itself is zoomed out.',
+    ] },
+    { title: 'Event log', items: [
+      'Added some minor logging to SQL server for statistics.',
+    ] },
+    { title: 'Changed', items: [
+      'Text selection and the browser right-click menu are disabled (except typing in the ' +
+        'username field).',
+      'added background demo you are probably seeing right now.',
+      'Added changelog. hello world!',
+      'Changed UI to look way prettier.',
+    ] },
   ] },
-  { title: 'Event log', items: [
-    'Added some minor logging to SQL server for statistics.',
+  { version: 'a0.2.2', groups: [
+    { title: 'Changed', items: [
+      'Progression now ranks by distance covered, like Infinite.',
+      'The top-10 panel is its own floating window, so it never resizes the menu.',
+    ] },
   ] },
-  { title: 'Changed', items: [
-    'Text selection and the browser right-click menu are disabled (except typing in the ' +
-      'username field).',
-    'added background demo you are probably seeing right now.',
-    'Added changelog. hello world!',
-    'Changed UI to look way prettier.',
+  { version: 'a0.2.1', groups: [
+    { title: 'Online leaderboard', items: [
+      'Persistent username and anonymous player ID, saved across reloads.',
+      'Runs from every mode submit automatically once they finish.',
+      'Top-10 panels on the main menu and every end-of-run screen.',
+    ] },
+    { title: 'World', items: [
+      'A distance marker every 50 m, and top-10 run markers in Infinite.',
+    ] },
+    { title: 'Changed', items: [
+      "The firewall's distance now reads on the left edge of the screen.",
+    ] },
+  ] },
+  { version: 'a0.2.0', groups: [
+    { title: 'Modes', items: [
+      'Infinite, Progression, Hacker and Levels 1-3.',
+    ] },
+    { title: 'World', items: [
+      'Bar-chart terrain, breakable network devices, cables, shelves and the firewall.',
+    ] },
+    { title: 'Power-ups', items: [
+      'Speed boost, gravity flip, big tires, Sirkkeli buzzsaw, backup packet.',
+    ] },
+    { title: 'Scoring', items: [
+      'Points for destroyed devices, bonuses and combos.',
+    ] },
+  ] },
+  { version: 'a0.1.0', groups: [
+    { title: 'Initial framework', items: [
+      'Truck physics, the packet in the bed, bar-chart terrain, static obstacles.',
+    ] },
   ] },
 ];

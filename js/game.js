@@ -114,6 +114,7 @@ class Game {
 
   startLevel(i) {
     if (!this.isLevelUnlocked(i)) return;
+    if (i === 0) this.menu.clearLevelsHighlight();   // the first-visit nudge has done its job
     this.mode = { type: 'level', index: i };
     this.menu.hide();
     this.reset();
@@ -299,11 +300,13 @@ class Game {
     this._updateCamera(dt);
   }
 
-  // Main menu demo background: resets terrain/world/spawner for a fresh randomized scene and
-  // parks the camera at its start (fixed for the whole demo - it never moves vertically).
-  // Reuses the same instances reset() uses for the next real run - harmless, since reset()
-  // always reinitializes them again once a mode is actually picked. Called from openMenu(), so
-  // it restarts every time the player lands back on the main menu.
+  // Main menu demo background: resets terrain/world/spawner, spawns one small static scene - a
+  // handful of router/switch/computer clusters, wired up (see Spawner.spawnDemoScene()) - and
+  // only then parks a fixed camera (it never moves - no scrolling, no vertical movement) so the
+  // scene sits centred in the viewport instead of wherever it happened to land. Reuses the same
+  // instances reset() uses for the next real run - harmless, since reset() always reinitializes
+  // them again once a mode is actually picked. Called from openMenu(), so it restarts (a fresh
+  // random scene) every time the player lands back on the main menu.
   startMenuDemo() {
     this.mode = { type: 'infinite' };   // normal Infinite device-spawn rules
     this.terrain.reset(CONFIG.infinite.difficultyBase);
@@ -311,35 +314,35 @@ class Game {
     this.spawner.reset(CONFIG.infinite, Infinity);
     this.powerups.reset();   // no power-ups spawn in the demo; just clearing any stale state
     this.finishX = Infinity;
-    this.camera.x = 0;
-    this.camera.y = this.terrain.heightAt(0) - CONFIG.menuDemo.cameraYOffset;
-    this.terrain.ensure(this.camera.x + this.view.w + 3000);
-    this._spawnMenuDemoBars();
+    this.spawner.spawnDemoScene(this.terrain, CONFIG.menuDemo.clusterCount);
+    const xs = this.world.props.map((p) => p.x);
+    const sceneCenterX = (Math.min(...xs) + Math.max(...xs)) / 2;
+    this.camera.x = sceneCenterX - this.view.w / 2;
+    this.camera.y = this.terrain.heightAt(sceneCenterX) - CONFIG.menuDemo.cameraYOffset;
   }
 
-  // The demo's own per-frame update: the camera scrolls right on its own (no truck to follow,
-  // no vertical movement), over normal terrain and spawned devices/cables/shelves - no
-  // power-ups - streamed in and settled exactly like a real run, just with no truck or packet
-  // taking part.
+  // The demo's own per-frame update: physics still steps every frame so cables settle/sag and
+  // anything not yet resting can do so - but the camera is fixed and the scene was spawned once
+  // in startMenuDemo(), so nothing new ever streams in. world.step() must run at the same fixed
+  // 240 Hz (CONFIG.physics.dt) as a real run's fixedStep() - prop/cable contacts are only stable
+  // at that rate (see CLAUDE.md), and stepping once at the raw ~60 Hz frame dt (4x too coarse)
+  // is exactly what made freshly-dropped clusters explode here: a real run never notices because
+  // every prop is placed one at a time, far ahead of a moving camera; this demo drops several
+  // clusters at once right where the camera already sits, with no streaming-away to hide it.
+  // this.accumulator is otherwise untouched while state === 'menu' (update() returns before
+  // reaching it), and reset() always zeroes it again before any real run, so reusing it here is
+  // safe.
   _updateMenuDemo(dt) {
-    this.camera.x += CONFIG.menuDemo.scrollSpeed * dt;
-
-    this.world.step(dt, this._menuDemoTruck, this.terrain, CONFIG.physics.gravity);
+    const step = CONFIG.physics.dt;
+    this.accumulator += dt;
+    let steps = 0;
+    while (this.accumulator >= step && steps < CONFIG.physics.maxStepsPerFrame) {
+      this.world.step(step, this._menuDemoTruck, this.terrain, CONFIG.physics.gravity);
+      this.accumulator -= step;
+      steps++;
+    }
+    if (steps === CONFIG.physics.maxStepsPerFrame) this.accumulator = 0;
     this.world.updateEffects(dt, this.terrain, CONFIG.physics.gravity);
-
-    const v = this.view;
-    this.terrain.ensure(v.x + v.w + 3000);
-    this._spawnMenuDemoBars();
-    this.terrain.prune(v.x - 800);
-    this.world.prune(v.x - 800);
-  }
-
-  // Like _spawnOnNewBars(), but devices/cables/shelves only - no power-ups, backups or coins
-  // (nothing in the demo could ever collect them). Still has to drain terrain.newBars itself,
-  // since nothing else does while the demo is running.
-  _spawnMenuDemoBars() {
-    this.spawner.update(this.terrain);
-    this.terrain.newBars.length = 0;
   }
 
   _spawnOnNewBars() {
@@ -725,12 +728,12 @@ class Game {
   showResults(title, reason, newBest) {
     const L = this.scoreLog, rows = [];
     const row = (label, key) => { const e = L[key]; if (e && e.n) rows.push([label, `×${e.n}`, e.pts]); };
-    row('Routers destroyed', 'router');
-    row('Switches destroyed', 'hub');
-    row('Computers destroyed', 'computer');
-    row('BRUTAL SMASH!', 'brutal');
-    row('SHELF BONUS!', 'shelf');
-    row('SNAGGING BONUS!', 'snag');
+    row('Routers', 'router');
+    row('Switches', 'hub');
+    row('Computers', 'computer');
+    row('Brutal smashes', 'brutal');
+    row('Shelf bonuses', 'shelf');
+    row('Ethernet Cables', 'snag');
     if (L.combo && L.combo.pts) rows.push([`Combo bonus (best ×${this.maxCombo.toFixed(1)})`, '', L.combo.pts]);
     const el = document.getElementById('results');
     document.getElementById('results-title').textContent = title;
@@ -831,8 +834,8 @@ class Game {
     if (this.debug) this.drawDebug(ctx);
   }
 
-  // Main menu demo background: just the terrain, props/cables and power-ups scrolling by - no
-  // truck, no packet, and none of the HUD-ish overlays (firewall, popups, fuel bar, ...).
+  // Main menu demo background: just the terrain and the spawned props/cables, from a fixed
+  // camera - no truck, no packet, and none of the HUD-ish overlays (firewall, popups, fuel bar, ...).
   _renderMenuDemo(ctx) {
     ctx.save();
     ctx.scale(this.zoom, this.zoom);

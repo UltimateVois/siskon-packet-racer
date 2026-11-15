@@ -53,11 +53,10 @@
           <span>Username: <strong id="menu-username-display"></strong></span>
           <button type="button" data-action="change-username" class="secondary small">Change Username</button>
         </div>
-        <p>Select game mode</p>
-        <button data-mode="infinite">INFINITE<small>Drive as far as you can</small></button>
-        <button data-mode="progression">PROGRESSION<small>Infinite, plus collect ₿ and shop for upgrades every 100 m</small></button>
-        <button data-mode="hacker">HACKER<small>Destroy as many network devices as possible.</small></button>
-        <button data-mode="levels">LEVELS<small>Beat each level to unlock the next</small></button>
+        <button data-mode="levels" data-desc="Beat each level to unlock the next">LEVELS</button>
+        <button data-mode="infinite" data-desc="Drive as far as you can">INFINITE</button>
+        <button data-mode="hacker" data-desc="Destroy as many network devices as possible.">HACKER</button>
+        <button data-mode="progression" data-desc="Infinite, plus collect ₿ and shop for upgrades every 100 m">PROGRESSION</button>
       </div>
       <div id="menu-levels" class="menu-page hidden">
         <p>Select level</p>
@@ -78,7 +77,6 @@
     </div>
     <p class="menu-help">↑/↓ select · ENTER confirm · ESC back</p>
     <div class="menu-controls">
-      <h2>Controls</h2>
       <div class="controls-grid">
         <span><kbd>Space</kbd> <kbd>↑</kbd></span><span>Gas</span>
         <span><kbd>Ctrl</kbd> <kbd>↓</kbd></span><span>Brake / reverse</span>
@@ -89,6 +87,13 @@
         <span><kbd>Esc</kbd></span><span>Menu</span>
       </div>
     </div>
+  </div>
+
+  <!-- The mode buttons' description text, moved out of their <small> subtext (which used to
+       grow the menu's height) into a tooltip that js/menu.js shows below whichever mode button
+       is hovered, and positions from that button's own rect. -->
+  <div id="menu-mode-tooltip" class="overlay mode-tooltip hidden">
+    <p id="menu-mode-tooltip-text"></p>
   </div>
 
   <!-- Its own separate floating window, positioned by js/menu.js to sit right of #menu - kept
@@ -106,7 +111,6 @@
       <a href="https://github.com/UltimateVois/siskon-packet-racer" target="_blank" rel="noopener noreferrer"
          class="changelog-github" title="View on GitHub">GitHub</a>
     </div>
-    <p id="changelog-version" class="changelog-version"></p>
     <div id="changelog-body" class="changelog-body"></div>
   </div>
 

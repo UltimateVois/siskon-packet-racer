@@ -60,7 +60,10 @@ class Spawner {
     return this.world.addShelf({ x0, x1, y0: bottom - S.shelfThickness, y1: bottom });
   }
 
-  _cluster(terrain, x0, d) {
+  // forceShelf: optional Set of kinds that must land on a shelf in this cluster regardless of
+  // this.rules.floorChance - used by spawnDemoScene() to guarantee a router-on-a-shelf without
+  // touching the shared floorChance rules object (which real modes also read).
+  _cluster(terrain, x0, d, forceShelf) {
     const S = CONFIG.spawner;
     let computers = 1;
     const extra = lerp(S.extraComputerChanceStart, S.extraComputerChanceEnd, d);
@@ -74,7 +77,8 @@ class Spawner {
       const spot = this._findSpot(terrain, x, x0 + S.maxClusterSpan, w);
       if (!spot) break;
       let surface = spot.top;
-      if (Math.random() >= this.rules.floorChance[kind]) surface = this._addShelf(terrain, spot.x, w).y0;
+      const onShelf = (forceShelf && forceShelf.has(kind)) || Math.random() >= this.rules.floorChance[kind];
+      if (onShelf) surface = this._addShelf(terrain, spot.x, w).y0;
       placed.push(this.world.addProp(makeProp(kind, spot.x, surface)));
       x = spot.x + w / 2 + rand(S.deviceGapMin, S.deviceGapMax);
     }
@@ -107,6 +111,23 @@ class Spawner {
     }
     const rest = Math.max(len, 20) * rand(C.slackMin, C.slackMax);
     this.world.addCable(new Cable({ body: a, port: ai }, { body: b, port: bi }, rest, pick(C.colors)));
+  }
+
+  // A fixed, static scene for the main menu demo background (js/game.js's startMenuDemo()):
+  // `count` clusters - router -> hub, computers on its other ports, each on the floor or a
+  // shelf per the mode's floorChance, same as a real cluster - laid out left to right with no
+  // gaps or office-supply decorations in between (see _decorate(), skipped entirely here). The
+  // first two clusters force their router onto a shelf, so the demo always shows at least two
+  // shelves each holding one router, rather than leaving that to floorChance's usual odds.
+  spawnDemoScene(terrain, count) {
+    const S = CONFIG.spawner;
+    const ROUTER_ON_SHELF = new Set(['router']);
+    let x = S.start;
+    for (let i = 0; i < count; i++) {
+      terrain.ensure(x + S.maxClusterSpan + S.lookahead);
+      const d = clamp(this.rules.difficultyBase + x / CONFIG.terrain.difficultyDistance, 0, 1);
+      x = this._cluster(terrain, x, d, i < 2 ? ROUTER_ON_SHELF : null) + rand(S.gapMin, S.gapMax);
+    }
   }
 
   // Office supplies (flower pots, pencil cases) only ever sit on shelves

@@ -1,6 +1,6 @@
 // All tunable numbers live here. Units: pixels, seconds. World y grows DOWN (canvas style).
 const CONFIG = {
-  version: 'a0.2.4',      // game version (shown in the main menu; see CHANGELOG.md)
+  version: 'a0.2.6',      // game version (shown in the main menu; see CHANGELOG.md)
   saveVersion: 2,         // bump to wipe saved records/unlocks on next load
 
   // Player identity (js/identity.js): a chosen username + a stable anonymous playerId.
@@ -348,11 +348,12 @@ const CONFIG = {
     floorChance: { router: 0.75, hub: 0.75, computer: 0.75 },
   },
 
-  // Main menu demo background (js/game.js's startMenuDemo()/_updateMenuDemo()): the camera
-  // scrolls right on its own at this speed (camera.y stays fixed) over a normal (reuses
-  // CONFIG.infinite's rules, minus power-ups) randomly generated world - no truck or packet.
+  // Main menu demo background (js/game.js's startMenuDemo()/_updateMenuDemo()): a fixed camera
+  // (no scrolling) over a small static scene of `clusterCount` network clusters - routers,
+  // switches (hubs) and computers, wired up (reuses CONFIG.infinite's floor/shelf rules, but no
+  // office-supply decorations, power-ups, truck or packet).
   menuDemo: {
-    scrollSpeed: 18.75,   // px/s
+    clusterCount: 3,      // how many router/switch/computer clusters to spawn
     cameraYOffset: 330,   // px above ground level the (fixed) camera sits
   },
 
