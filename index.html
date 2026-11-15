@@ -72,6 +72,7 @@
           <p id="username-error" class="menu-error hidden"></p>
           <button type="submit">SAVE</button>
           <button type="button" id="username-cancel" data-action="username-cancel" class="secondary hidden">CANCEL</button>
+          <button type="button" id="username-skip" data-action="username-skip" class="secondary hidden">SKIP (PLAY AS GUEST)</button>
         </form>
       </div>
     </div>
@@ -134,6 +135,26 @@
   </div>
 
   <div id="help">SPACE/↑ gas · CTRL/↓ brake/reverse · SHIFT jetpack · ←/→ tilt · P pause · R restart · ESC menu · D debug</div>
+
+  <!-- Shown instead of a silent score submission when the finishing player is still a guest
+       (js/leaderboard.js's GuestSubmitPrompt). Placed after every other overlay in the DOM so
+       it paints on top of #message/#results, which stay visible underneath it. -->
+  <div id="guest-submit" class="overlay menu hidden">
+    <h1>SUBMIT SCORE?</h1>
+    <p id="guest-submit-sub">You're playing as a guest. Submit this run's score to the leaderboard?</p>
+    <div id="guest-submit-choice">
+      <button type="button" data-action="guest-submit-yes">YES</button>
+      <button type="button" data-action="guest-submit-no" class="secondary">NO</button>
+      <button type="button" data-action="guest-submit-never" class="secondary small">DON'T ASK AGAIN</button>
+    </div>
+    <form id="guest-submit-form" class="hidden">
+      <input id="guest-submit-input" type="text" maxlength="32" autocomplete="off" spellcheck="false"
+             placeholder="3-16 chars: letters, numbers, _ -">
+      <p id="guest-submit-error" class="menu-error hidden"></p>
+      <button type="submit">SAVE &amp; SUBMIT</button>
+      <button type="button" data-action="guest-submit-cancel" class="secondary">CANCEL</button>
+    </form>
+  </div>
 
   <div id="leaderboard-toast" class="leaderboard-toast hidden"></div>
 

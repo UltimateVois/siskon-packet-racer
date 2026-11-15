@@ -14,6 +14,7 @@ class Menu {
     this.usernameError = document.getElementById('username-error');
     this.usernameForm = document.getElementById('username-form');
     this.usernameCancel = document.getElementById('username-cancel');
+    this.usernameSkip = document.getElementById('username-skip');
     this.usernameForced = true;
     this.page = 'modes';
     this.leaderboardPanel = document.getElementById('menu-leaderboard');
@@ -38,6 +39,7 @@ class Menu {
       else if (b.dataset.action === 'back') this.show('modes');
       else if (b.dataset.action === 'change-username') this.show('username');
       else if (b.dataset.action === 'username-cancel' && !this.usernameForced) this.show('modes');
+      else if (b.dataset.action === 'username-skip' && this.usernameForced) this._skipUsername();
     });
 
     if (this.usernameForm) {
@@ -121,10 +123,12 @@ class Menu {
   }
 
   // hasUsername === false means this is the forced first-launch prompt: no way to cancel out
-  // of it, since a mode can't be started without a username.
+  // of it (but Skip is offered instead - see _skipUsername()), since a mode can't be started
+  // without a username.
   _openUsernameForm(hasUsername) {
     this.usernameForced = !hasUsername;
     if (this.usernameCancel) this.usernameCancel.classList.toggle('hidden', this.usernameForced);
+    if (this.usernameSkip) this.usernameSkip.classList.toggle('hidden', !this.usernameForced);
     if (this.usernameError) this.usernameError.classList.add('hidden');
     if (this.usernameInput) this.usernameInput.value = hasUsername ? Identity.getUsername() : '';
   }
@@ -139,6 +143,14 @@ class Menu {
       return;
     }
     this.game.eventLog.log('username_set');
+    this.show('modes');
+  }
+
+  // Forced first-launch prompt only (see _openUsernameForm): lets the player start playing
+  // right away under a throwaway "GuestNNNN" name instead of picking one. Leaderboard
+  // submissions for guests are gated behind GuestSubmitPrompt instead of posting silently.
+  _skipUsername() {
+    Identity.skipUsername();
     this.show('modes');
   }
 

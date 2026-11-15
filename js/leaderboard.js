@@ -24,7 +24,7 @@ class Leaderboard {
     if (!hasTime && !hasDistance && !(score >= L.minScore)) return;   // nothing worth posting
 
     const username = Identity.getUsername();
-    if (!username) return;                                            // no identity yet: skip quietly
+    if (!username || Identity.isGuest()) return;   // no identity yet, or still a guest: skip quietly
     const playerId = Identity.getPlayerId();                          // regenerates on its own if missing
 
     const payload = {
@@ -59,8 +59,11 @@ class Leaderboard {
     }
   }
 
-  // Top N rows for one mode, as [{ username, score, time, distance }, ...], best first. Used by
-  // the main menu's side panel and the end-of-run screens. Levels rank by time ascending
+  // Top N rows for one mode, as [{ username, score, time, distance }, ...], best first, one row
+  // per username (see dedupeByUsername() - a player with several runs on the board only ever
+  // occupies their single best slot). Used by the main menu's side panel, the end-of-run
+  // screens, and (for a distance-ranked mode) Game's visual run markers/rank-passing popups -
+  // see Game._loadTopRunMarkers(), which reads this same list. Levels rank by time ascending
   // (fastest first); Infinite ranks by distance descending; every other mode ranks by score
   // descending. Results are cached briefly (topCacheTime) so moving focus/hover between mode
   // buttons doesn't hammer the network; returns [] rather than throwing when unconfigured,
@@ -81,13 +84,18 @@ class Leaderboard {
       const order = metric === 'time' ? 'time.asc.nullslast'
         : metric === 'distance' ? 'distance.desc.nullslast' : 'score.desc';
       const extraCol = metric === 'score' ? '' : `,${metric}`;
+      // Overfetch and dedupe client-side (PostgREST has no "distinct on" over a REST filter):
+      // one player's several attempts could otherwise fill most of the raw top rows, crowding
+      // out other players - 5x covers that with a small, fixed-size payload.
+      const fetchLimit = limit * 5;
       const url = `${L.supabaseUrl}/rest/v1/${L.table}?select=username,score${extraCol}&mode=eq.${encodeURIComponent(mode)}` +
-        `&order=${order}&limit=${limit}`;
+        `&order=${order}&limit=${fetchLimit}`;
       const res = await fetch(url, {
         headers: { apikey: L.supabaseAnonKey, Authorization: `Bearer ${L.supabaseAnonKey}` },
       });
       if (!res.ok) throw new Error(`Supabase responded ${res.status}`);
-      const rows = await res.json();
+      const raw = await res.json();
+      const rows = dedupeByUsername(raw).slice(0, limit);
       this._topCache.set(mode, { t: Date.now(), rows });
       return rows;
     } catch (err) {
@@ -104,6 +112,18 @@ class Leaderboard {
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.add('hidden'), CONFIG.leaderboard.toastTime * 1000);
   }
+}
+
+// Keeps only each username's best row from a fetchTop() query. Rows arrive already ordered
+// best-first, so a username's first occurrence is its top entry - every later one is a worse
+// run by the same player and gets dropped.
+function dedupeByUsername(rows) {
+  const seen = new Set();
+  return rows.filter((r) => {
+    if (seen.has(r.username)) return false;
+    seen.add(r.username);
+    return true;
+  });
 }
 
 // Human-readable title for a leaderboard mode key ('infinite', 'level2', ...). Used by every
@@ -136,4 +156,104 @@ function leaderboardValueFn(mode) {
   if (metric === 'time') return (r) => (typeof r.time === 'number' ? formatTime(r.time) : '--');
   if (metric === 'distance') return (r) => (typeof r.distance === 'number' ? `${r.distance} m` : '--');
   return undefined;
+}
+
+// Gate in front of Leaderboard.submitRun() for a run that just finished: a real identity
+// submits immediately, same as always. A guest (see Identity.isGuest(), set by the main menu's
+// Skip button) is asked first via a small dialog on top of the end-of-run screen - "Yes" reveals
+// an inline username field (saving it ends guest status, same as the main menu's "Change
+// Username", then submits the pending run for real; Cancel there backs out to the Yes/No
+// choice without losing the pending submission), "No" skips just this one run, and "Don't ask
+// again" skips every future prompt until the player sets a real username themselves.
+class GuestSubmitPrompt {
+  constructor(game) {
+    this.game = game;
+    this.el = document.getElementById('guest-submit');
+    this.choice = document.getElementById('guest-submit-choice');
+    this.form = document.getElementById('guest-submit-form');
+    this.input = document.getElementById('guest-submit-input');
+    this.error = document.getElementById('guest-submit-error');
+    this._pending = null;   // { mode, score, opts } queued while this is open
+
+    if (this.el) {
+      this.el.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.action === 'guest-submit-yes') this._showForm();
+        else if (b.dataset.action === 'guest-submit-no') this.close();
+        else if (b.dataset.action === 'guest-submit-never') { Identity.dismissGuestPrompt(); this.close(); }
+        else if (b.dataset.action === 'guest-submit-cancel') this._showChoice();
+      });
+    }
+    if (this.form) {
+      this.form.addEventListener('submit', (e) => { e.preventDefault(); this._save(); });
+    }
+  }
+
+  get visible() { return !!this.el && !this.el.classList.contains('hidden'); }
+
+  // Called instead of a direct Leaderboard.submitRun() wherever a run just finished (see
+  // Game.gameOver()/levelComplete()). opts matches submitRun's own { time } / { distance }.
+  maybeSubmit(mode, score, opts) {
+    if (!Identity.isGuest()) {
+      this.game.leaderboard.submitRun(mode, score, opts);
+      this.game.eventLog.log('score_upload', mode);
+      return;
+    }
+    if (Identity.guestPromptDismissed()) return;   // player asked never to be asked again
+    this._pending = { mode, score, opts };
+    if (this.el) this.el.classList.remove('hidden');
+    this._showChoice();
+  }
+
+  // The Yes/No/Don't-ask-again row - the dialog's opening view, and also where "Cancel" on the
+  // username form backs out to (the pending submission is kept either way).
+  _showChoice() {
+    if (this.choice) this.choice.classList.remove('hidden');
+    if (this.form) this.form.classList.add('hidden');
+    if (this.error) this.error.classList.add('hidden');
+    const first = this.choice && this.choice.querySelector('button');
+    if (first) first.focus();
+  }
+
+  _showForm() {
+    if (this.choice) this.choice.classList.add('hidden');
+    if (this.form) this.form.classList.remove('hidden');
+    if (this.error) this.error.classList.add('hidden');
+    if (this.input) { this.input.value = ''; this.input.focus(); }
+  }
+
+  _save() {
+    const result = Identity.setUsername(this.input ? this.input.value : '');
+    if (!result.ok) {
+      if (this.error) { this.error.textContent = result.error; this.error.classList.remove('hidden'); }
+      return;
+    }
+    this.game.eventLog.log('username_set');
+    const pending = this._pending;
+    this.close();
+    if (pending) {
+      this.game.leaderboard.submitRun(pending.mode, pending.score, pending.opts);
+      this.game.eventLog.log('score_upload', pending.mode);
+    }
+  }
+
+  close() {
+    this._pending = null;
+    if (this.el) this.el.classList.add('hidden');
+  }
+
+  // Escape backs out one level - same as Cancel on the username form, same as "No" on the
+  // Yes/No/Don't-ask-again row. Arrow keys move focus among whichever buttons are currently shown.
+  handleInput(input) {
+    const formVisible = this.form && !this.form.classList.contains('hidden');
+    if (input.pressed('Escape')) { formVisible ? this._showChoice() : this.close(); return; }
+    const scope = formVisible ? this.form : this.choice;
+    if (!scope) return;
+    const btns = [...scope.querySelectorAll('button')];
+    if (!btns.length) return;
+    const i = btns.indexOf(document.activeElement);
+    if (input.pressed('ArrowDown')) btns[(i + 1) % btns.length].focus();
+    if (input.pressed('ArrowUp')) btns[(i - 1 + btns.length) % btns.length].focus();
+  }
 }

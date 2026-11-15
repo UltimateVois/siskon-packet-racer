@@ -362,7 +362,7 @@ kbd {
 .menu button.small { font-size: 12px; padding: 6px 10px; width: auto; }
 
 #username-form { display: flex; flex-direction: column; gap: 10px; }
-#menu-username input {
+#menu-username input, #guest-submit input {
   font-family: var(--font);
   font-size: 16px;
   letter-spacing: 1px;
@@ -382,6 +382,10 @@ kbd {
 #menu-username input:focus { outline: none; border-color: var(--accent); }
 .menu-error { color: var(--warn) !important; font-size: 12px !important; opacity: 1 !important; text-align: left; }
 .menu-error.hidden { display: none; }
+
+/* ---------- Guest score-submission prompt ---------- */
+#guest-submit-choice, #guest-submit-form { display: flex; flex-direction: column; gap: 10px; }
+#guest-submit-choice.hidden, #guest-submit-form.hidden { display: none; }
 
 /* ---------- Leaderboard upload failure notice (small, non-intrusive) ---------- */
 .leaderboard-toast {

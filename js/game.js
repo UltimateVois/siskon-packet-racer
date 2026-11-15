@@ -67,6 +67,7 @@ class Game {
     this.shop = new Shop(this);
     this.leaderboard = new Leaderboard();
     this.eventLog = new EventLog();
+    this.guestPrompt = new GuestSubmitPrompt(this);
     this.eventLog.log('connect');
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -124,6 +125,7 @@ class Game {
     this.hideMessage();
     this.hideResults();
     this.shop.hide();
+    this.guestPrompt.close();
     this.startMenuDemo();
     this.menu.show(page);
   }
@@ -243,6 +245,7 @@ class Game {
   handleInput() {
     const inp = this.input;
     if (inp.pressed('KeyD')) this.debug = !this.debug;
+    if (this.guestPrompt.visible) { this.guestPrompt.handleInput(inp); return; }
     if (this.state === 'menu') { this.menu.handleInput(inp); return; }
     if (this.state === 'shop') {
       if (inp.pressed('Escape')) { this.openMenu(); return; }
@@ -667,8 +670,7 @@ class Game {
     // leaderboard entry would mean here - only levelComplete() submits for Levels. Infinite and
     // Progression rank by distance covered, not points.
     if (!lv) {
-      this.leaderboard.submitRun(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined);
-      this.eventLog.log('score_upload', mode);
+      this.guestPrompt.maybeSubmit(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined);
     }
     let sub;
     if (lv) {
@@ -753,8 +755,7 @@ class Game {
     this.state = 'complete';
     const mode = this._leaderboardMode();
     this.eventLog.log('mode_finish', mode);
-    this.leaderboard.submitRun(mode, this.score, { time: this.runTime });
-    this.eventLog.log('score_upload', mode);
+    this.guestPrompt.maybeSubmit(mode, this.score, { time: this.runTime });
     const i = this.mode.index, lv = this.level, t = this.runTime;
     const prev = this.levelRecords[i];
     let sub = `Time: ${formatTime(t)}  ·  Score: ${this.score}`;
