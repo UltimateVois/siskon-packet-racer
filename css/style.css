@@ -239,7 +239,7 @@ html, body {
   top: 0;
   left: 0;
   transform: none;   /* override .overlay's centering transform; JS sets the real position */
-  width: 200px;
+  width: 300px;       /* 1.5x the original 200px */
   padding: 18px 20px;
   text-align: left;
 }
@@ -305,7 +305,7 @@ html, body {
 .changelog-body h3 {
   font-size: 11px;
   letter-spacing: 1px;
-  color: var(--fg);
+  color: var(--button-green);
   opacity: 0.8;
   margin: 10px 0 4px;
 }

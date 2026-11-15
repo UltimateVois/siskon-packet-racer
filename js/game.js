@@ -656,11 +656,20 @@ class Game {
     if (gen !== this._runGen) return;
     const ranked = rows.filter((r) => typeof r.distance === 'number' && r.distance > 0);
     this.topRunMarkers = ranked.map((r) => ({ x: startX + r.distance * CONFIG.world.pxPerMeter, username: r.username }));
-    this.topRankThresholds = [
-      ranked[2] && { distance: ranked[2].distance, text: "You're top 3!", color: '#5eeb95' },
-      ranked[1] && { distance: ranked[1].distance, text: "You're almost #1!", color: '#2ed573' },
-      ranked[0] && { distance: ranked[0].distance, text: 'You are number 1!', color: '#ffe66d' },
-    ].filter(Boolean).map((t) => ({ ...t, shown: false }));
+    // One popup per rank reached (as many as the leaderboard has, up to its topCount) - #1-#3
+    // keep their own messages, every other rank just announces "You're #X!". Built in ascending-
+    // distance order (easiest rank first) same as before; order doesn't affect fixedStep()'s
+    // check, which is per-entry anyway.
+    const RANK_TEXT = {
+      1: ['You are number 1!', '#ffe66d'],
+      2: ["You're almost #1!", '#2ed573'],
+      3: ["You're top 3!", '#5eeb95'],
+    };
+    this.topRankThresholds = ranked.map((r, i) => {
+      const rank = i + 1;
+      const [text, color] = RANK_TEXT[rank] || [`You're #${rank}!`, '#5eeb95'];
+      return { distance: r.distance, text, color, shown: false };
+    }).reverse();
   }
 
   gameOver(title, reason) {
@@ -668,12 +677,13 @@ class Game {
     const mode = this._leaderboardMode();
     const lv = this.level;
     const d = Math.floor(this.distance);
+    const gen = this._runGen;
     this.eventLog.log('mode_finish', mode);
     // A failed level attempt has no completion time, so there's nothing a Levels (time-based)
     // leaderboard entry would mean here - only levelComplete() submits for Levels. Infinite and
     // Progression rank by distance covered, not points.
     if (!lv) {
-      this.guestPrompt.maybeSubmit(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined);
+      this.guestPrompt.maybeSubmit(mode, this.score, leaderboardMetric(mode) === 'distance' ? { distance: d } : undefined, gen);
     }
     let sub;
     if (lv) {
@@ -708,8 +718,11 @@ class Game {
 
   // Populates and reveals the small top-N leaderboard panel on a terminal screen.
   // panelPrefix matches the DOM id prefix: 'message' (game over / level complete) or
-  // 'results' (Hacker's results screen).
+  // 'results' (Hacker's results screen). Remembered (see refreshEndLeaderboard()) so a score
+  // submission that lands after this first paint can repaint the same panel with the player's
+  // own new entry, instead of leaving it showing the stale pre-submission list until they reload.
   async _showEndLeaderboard(panelPrefix, mode) {
+    this._endLeaderboardPanel = panelPrefix;
     const panel = document.getElementById(`${panelPrefix}-leaderboard`);
     const list = document.getElementById(`${panelPrefix}-leaderboard-list`);
     const title = document.getElementById(`${panelPrefix}-leaderboard-title`);
@@ -722,6 +735,17 @@ class Game {
     // The player may have already retried (R) before this resolved - don't paint a stale panel.
     if (this.state !== 'over' && this.state !== 'complete') return;
     renderLeaderboardRows(list, rows, valueFn);
+  }
+
+  // Called once a score submission actually lands (Leaderboard.submitRun() resolving truthy -
+  // see GuestSubmitPrompt) to repaint the end-of-run panel now that its cached top list has
+  // been invalidated and genuinely includes the new row. gen (captured from this._runGen when
+  // the run finished) guards against a later run finishing first and this stale refresh
+  // clobbering its panel instead.
+  refreshEndLeaderboard(mode, gen) {
+    if (gen !== this._runGen) return;
+    if (this.state !== 'over' && this.state !== 'complete') return;
+    this._showEndLeaderboard(this._endLeaderboardPanel, mode);
   }
 
   // Hacker mode results: every kind of points collected, as a list
@@ -757,8 +781,9 @@ class Game {
   levelComplete() {
     this.state = 'complete';
     const mode = this._leaderboardMode();
+    const gen = this._runGen;
     this.eventLog.log('mode_finish', mode);
-    this.guestPrompt.maybeSubmit(mode, this.score, { time: this.runTime });
+    this.guestPrompt.maybeSubmit(mode, this.score, { time: this.runTime }, gen);
     const i = this.mode.index, lv = this.level, t = this.runTime;
     const prev = this.levelRecords[i];
     let sub = `Time: ${formatTime(t)}  ·  Score: ${this.score}`;

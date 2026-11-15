@@ -304,6 +304,23 @@ function formatTime(sec) { return sec.toFixed(2) + ' s'; }
 // bullets here, same as before) - fetching that file doesn't work when the game is run via a
 // plain file:// open, with no server (see CLAUDE.md's golden rule on no build step/no server).
 const CHANGELOG_VERSIONS = [
+  { version: 'a0.2.7', groups: [
+    { title: 'Main menu', items: [
+      'The demo background no longer scrolls - a small, centered, wired-up scene of network ' +
+        'gear instead.',
+      'Scrollbars got a blocky green style, the Changelog window got some cleanup, and the ' +
+        'leaderboard window is 1.5x wider.',
+    ] },
+    { title: 'Fixed', items: [
+      "The main menu demo's physics no longer explodes on load.",
+    ] },
+    { title: 'World', items: [
+      'Rank-passing popups now go all the way to #10, not just the top 3.',
+    ] },
+    { title: 'Leaderboard', items: [
+      'Your new score now shows up immediately after a run ends - no reload needed.',
+    ] },
+  ] },
   { version: 'a0.2.6', groups: [
     { title: 'Main menu', items: [
       'Reordered mode buttons and cleaned up the main menu.',

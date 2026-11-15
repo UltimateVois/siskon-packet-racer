@@ -16,6 +16,9 @@ class Leaderboard {
   // distance: metres (optional) - Infinite ranks by this, not score.
   // A run with a time or distance is always worth posting even if it scored 0 (minScore only
   // guards the purely score-based modes, where a 0-point run really is nothing worth posting).
+  // Returns true once the row actually landed (so a caller can refresh a leaderboard view that's
+  // already on screen - see GuestSubmitPrompt and Game.refreshEndLeaderboard()); falsy
+  // otherwise (nothing to post, no identity, or the upload failed).
   async submitRun(mode, score, { time, distance } = {}) {
     const L = CONFIG.leaderboard;
     if (!L.enabled || !L.supabaseUrl || !L.supabaseAnonKey) return;   // leaderboard not configured
@@ -53,6 +56,8 @@ class Leaderboard {
         const body = await res.text().catch(() => '');
         throw new Error(`Supabase responded ${res.status}: ${body}`);
       }
+      this._topCache.delete(mode);   // this mode's cached top list no longer includes this row
+      return true;
     } catch (err) {
       console.error('[leaderboard] score upload failed:', err);
       this._showToast('Could not upload score to leaderboard');
@@ -173,7 +178,7 @@ class GuestSubmitPrompt {
     this.form = document.getElementById('guest-submit-form');
     this.input = document.getElementById('guest-submit-input');
     this.error = document.getElementById('guest-submit-error');
-    this._pending = null;   // { mode, score, opts } queued while this is open
+    this._pending = null;   // { mode, score, opts, gen } queued while this is open
 
     if (this.el) {
       this.el.addEventListener('click', (e) => {
@@ -193,15 +198,18 @@ class GuestSubmitPrompt {
   get visible() { return !!this.el && !this.el.classList.contains('hidden'); }
 
   // Called instead of a direct Leaderboard.submitRun() wherever a run just finished (see
-  // Game.gameOver()/levelComplete()). opts matches submitRun's own { time } / { distance }.
-  maybeSubmit(mode, score, opts) {
+  // Game.gameOver()/levelComplete()). opts matches submitRun's own { time } / { distance }; gen
+  // is that run's this._runGen, passed straight through to refreshEndLeaderboard() so a later
+  // run can't have its own fresh panel clobbered by this one's (possibly much later, for a
+  // guest) submission landing.
+  maybeSubmit(mode, score, opts, gen) {
     if (!Identity.isGuest()) {
-      this.game.leaderboard.submitRun(mode, score, opts);
+      this.game.leaderboard.submitRun(mode, score, opts).then((ok) => { if (ok) this.game.refreshEndLeaderboard(mode, gen); });
       this.game.eventLog.log('score_upload', mode);
       return;
     }
     if (Identity.guestPromptDismissed()) return;   // player asked never to be asked again
-    this._pending = { mode, score, opts };
+    this._pending = { mode, score, opts, gen };
     if (this.el) this.el.classList.remove('hidden');
     this._showChoice();
   }
@@ -233,7 +241,8 @@ class GuestSubmitPrompt {
     const pending = this._pending;
     this.close();
     if (pending) {
-      this.game.leaderboard.submitRun(pending.mode, pending.score, pending.opts);
+      this.game.leaderboard.submitRun(pending.mode, pending.score, pending.opts)
+        .then((ok) => { if (ok) this.game.refreshEndLeaderboard(pending.mode, pending.gen); });
       this.game.eventLog.log('score_upload', pending.mode);
     }
   }

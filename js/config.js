@@ -1,6 +1,6 @@
 // All tunable numbers live here. Units: pixels, seconds. World y grows DOWN (canvas style).
 const CONFIG = {
-  version: 'a0.2.6',      // game version (shown in the main menu; see CHANGELOG.md)
+  version: 'a0.2.7',      // game version (shown in the main menu; see CHANGELOG.md)
   saveVersion: 2,         // bump to wipe saved records/unlocks on next load
 
   // Player identity (js/identity.js): a chosen username + a stable anonymous playerId.
